@@ -19,6 +19,11 @@ namespace GitExtensions.WinUI.Views;
 /// </remarks>
 public sealed partial class HistoryView : RepositoryPage
 {
+    /// <summary>
+    ///  What was selected before the most recent right-click, which is the other side of a comparison.
+    /// </summary>
+    private CommitRowViewModel? _previousSelection;
+
     public HistoryView()
     {
         InitializeComponent();
@@ -33,6 +38,9 @@ public sealed partial class HistoryView : RepositoryPage
         if (Tab is RepositoryTabViewModel tab
             && sender is FrameworkElement { DataContext: CommitRowViewModel commit })
         {
+            // Remembered before the selection moves, so "compare with the selected commit" has
+            // something to mean once the right-click has changed what is selected.
+            _previousSelection = tab.SelectedCommit;
             tab.SelectedCommit = commit;
         }
     }
@@ -166,6 +174,44 @@ public sealed partial class HistoryView : RepositoryPage
             await ReportAsync(tab => tab.CheckoutDetachedAsync(commit.FullHash));
         }
     }
+
+    /// <summary>
+    ///  Compares the right-clicked commit with the one that was already selected.
+    /// </summary>
+    /// <remarks>
+    ///  Right-clicking selects the row first, so by the time this runs the clicked commit is the
+    ///  selection and the previously selected one is what to compare against. That earlier commit is
+    ///  captured before the menu opens, in <see cref="CommitRow_RightTapped"/>.
+    /// </remarks>
+    private void CompareWith_Click(object sender, RoutedEventArgs e)
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        if (_previousSelection is null || ReferenceEquals(_previousSelection, tab.SelectedCommit))
+        {
+            tab.ReportInformation(
+                "Nothing to compare with",
+                "Select one commit, then right-click a second one and choose Compare.");
+
+            return;
+        }
+
+        if (_previousSelection.IsWorkingDirectory || tab.SelectedCommit?.IsWorkingDirectory == true)
+        {
+            tab.ReportInformation(
+                "Cannot compare that",
+                "The working directory row is not a commit. Compare two commits instead.");
+
+            return;
+        }
+
+        tab.CompareTarget = _previousSelection;
+    }
+
+    private void StopComparing_Click(object sender, RoutedEventArgs e) => Tab?.StopComparing();
 
     private async void CherryPick_Click(object sender, RoutedEventArgs e) =>
         await ReportAsync(tab => tab.CherryPickAsync());

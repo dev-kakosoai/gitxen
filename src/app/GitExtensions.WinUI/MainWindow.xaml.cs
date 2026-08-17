@@ -272,6 +272,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    ///  Opens the command palette. Window-level so it works from any page, which is the whole point of
+    ///  a palette.
+    /// </summary>
+    private async void PaletteAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+
+        if (ViewModel.SelectedTab is not null)
+        {
+            await Repository.ShowPaletteAsync();
+        }
+    }
+
     private void ModeBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) =>
         ViewModel.Mode = ReferenceEquals(sender.SelectedItem, AdvancedModeItem) ? UiMode.Advanced : UiMode.Simple;
 

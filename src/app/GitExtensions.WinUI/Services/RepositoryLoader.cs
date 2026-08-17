@@ -669,6 +669,40 @@ internal sealed partial class RepositoryLoader
         Run($"Checkout {branch}", Commands.Checkout(branch, LocalChangesAction.DontChange));
 
     /// <summary>
+    ///  Undoes the last commit, keeping its changes staged.
+    /// </summary>
+    /// <remarks>
+    ///  A soft reset, so nothing is lost: the files stay exactly as they were and the commit's own
+    ///  message can be recovered from the reflog. This is the "I committed too early" button, not a
+    ///  way to discard work.
+    /// </remarks>
+    public GitOperationResult UndoLastCommit() =>
+        Run("Undo last commit", Commands.Reset(ResetMode.Soft, "HEAD~1"));
+
+    /// <summary>The files that differ between two commits, for comparing them directly.</summary>
+    public IReadOnlyList<GitItemStatus> GetChangedFilesBetween(ObjectId first, ObjectId second, CancellationToken cancellationToken) =>
+        _module.GetDiffFilesWithUntracked(first.ToString(), second.ToString(), StagedStatus.None, cancellationToken: cancellationToken);
+
+    /// <summary>One file's diff between two arbitrary commits.</summary>
+    public async Task<string> GetDiffTextBetweenAsync(ObjectId first, ObjectId second, string fileName, string? oldFileName, CancellationToken cancellationToken)
+    {
+        (Patch? patch, string? errorMessage) = await _module.GetSingleDiffAsync(
+            first,
+            second,
+            fileName,
+            oldFileName,
+            extraDiffArguments: "",
+            encoding: Encoding.UTF8,
+            cacheResult: true,
+            isTracked: true,
+            useGitColoring: false,
+            commandConfiguration: GitCommandConfiguration.Default,
+            cancellationToken: cancellationToken);
+
+        return patch?.Text ?? errorMessage ?? "";
+    }
+
+    /// <summary>
     ///  The remote to fetch/pull/push against — the one configured for the current branch where there
     ///  is one, otherwise the repository's first remote.
     /// </summary>

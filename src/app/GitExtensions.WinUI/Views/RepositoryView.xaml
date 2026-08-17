@@ -138,6 +138,35 @@
             <Grid Grid.Row="0" Padding="20,8,20,8">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
                             HorizontalAlignment="Left">
+
+                    <!-- Switching branch is the most frequent thing anyone does, so it leads the bar
+                         and carries the divergence counts rather than hiding them on a page. -->
+                    <DropDownButton x:Name="BranchButton" ToolTipService.ToolTip="Switch branch">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8AB;" FontSize="12" />
+                            <TextBlock Text="{x:Bind Tab.BranchHeader, Mode=OneWay}" />
+                            <Border Style="{StaticResource RefBadgeStyle}"
+                                    Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                    Visibility="{x:Bind Tab.AheadVisibility, Mode=OneWay}">
+                                <TextBlock FontSize="10">
+                                    <Run Text="&#x2191;" /><Run Text="{x:Bind Tab.AheadCount, Mode=OneWay}" />
+                                </TextBlock>
+                            </Border>
+                            <Border Style="{StaticResource RefBadgeStyle}"
+                                    Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                    Visibility="{x:Bind Tab.BehindVisibility, Mode=OneWay}">
+                                <TextBlock FontSize="10">
+                                    <Run Text="&#x2193;" /><Run Text="{x:Bind Tab.BehindCount, Mode=OneWay}" />
+                                </TextBlock>
+                            </Border>
+                        </StackPanel>
+                        <DropDownButton.Flyout>
+                            <MenuFlyout x:Name="BranchFlyout" Placement="Bottom" />
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+
+                    <AppBarSeparator />
+
                     <Button Click="Fetch_Click" ToolTipService.ToolTip="Fetch from the remote">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE896;" FontSize="12" />
@@ -186,6 +215,13 @@
                             </MenuFlyout>
                         </DropDownButton.Flyout>
                     </DropDownButton>
+
+                    <Button Click="Palette_Click" ToolTipService.ToolTip="Command palette (Ctrl+Shift+P)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE721;" FontSize="12" />
+                            <TextBlock Text="Commands" />
+                        </StackPanel>
+                    </Button>
 
                     <ProgressRing Width="16" Height="16" VerticalAlignment="Center"
                                   IsActive="{x:Bind Tab.IsBusy, Mode=OneWay}" />

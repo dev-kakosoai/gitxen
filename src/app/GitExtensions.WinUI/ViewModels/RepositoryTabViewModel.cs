@@ -64,6 +64,7 @@ public sealed class RepositoryTabViewModel : ObservableObject
     private string? _selectedBranch;
     private bool _suppressBranchCheckout;
     private CommitRowViewModel? _selectedCommit;
+    private CommitRowViewModel? _compareTarget;
     private ChangedFileViewModel? _selectedChangedFile;
 
     public RepositoryTabViewModel(IGitExecutorProvider executorProvider, string workingDir, UiMode mode)
@@ -398,6 +399,40 @@ public sealed class RepositoryTabViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    ///  A second commit to compare <see cref="SelectedCommit"/> against.
+    /// </summary>
+    /// <remarks>
+    ///  When set, the changed-files pane and the diff panel show the difference between the two
+    ///  commits rather than what the selected one changed. Reusing those two controls is why
+    ///  comparing needs no separate page: the question "what is different" has the same shape whether
+    ///  the answer comes from one commit or two.
+    /// </remarks>
+    public CommitRowViewModel? CompareTarget
+    {
+        get => _compareTarget;
+        set
+        {
+            if (SetProperty(ref _compareTarget, value))
+            {
+                OnPropertyChanged(nameof(IsComparing));
+                OnPropertyChanged(nameof(CompareVisibility));
+                OnPropertyChanged(nameof(CompareDescription));
+                _ = LoadChangedFilesAsync(SelectedCommit);
+            }
+        }
+    }
+
+    public bool IsComparing => CompareTarget is not null && SelectedCommit is not null;
+
+    public Visibility CompareVisibility => IsComparing ? Visibility.Visible : Visibility.Collapsed;
+
+    public string CompareDescription =>
+        IsComparing ? $"Comparing {CompareTarget!.ShortHash} → {SelectedCommit!.ShortHash}" : "";
+
+    /// <summary>Drops back to showing what the selected commit itself changed.</summary>
+    public void StopComparing() => CompareTarget = null;
+
     public bool HasSelectedCommit => SelectedCommit is not null;
 
     /// <summary>Collapses the details pane's contents rather than showing empty fields.</summary>
@@ -494,6 +529,10 @@ public sealed class RepositoryTabViewModel : ObservableObject
 
     public Task<GitOperationResult> CommitAllAsync(string message) =>
         RunOperationAsync(loader => loader.CommitAll(message));
+
+    /// <summary>Undoes the last commit, keeping its changes staged so they can be recommitted.</summary>
+    public Task<GitOperationResult> UndoLastCommitAsync() =>
+        RunOperationAsync(loader => loader.UndoLastCommit());
 
     public Task<string> GetLastCommitMessageAsync() => Task.Run(_loader.GetLastCommitMessage);
 
@@ -948,11 +987,25 @@ public sealed class RepositoryTabViewModel : ObservableObject
             bool isWorkingDirectory = commit.IsWorkingDirectory;
             GitRevision? revision = commit.Revision;
 
-            IReadOnlyList<GitItemStatus> files = await Task.Run(
-                () => isWorkingDirectory
-                    ? _loader.GetWorkingDirectoryChanges()
-                    : _loader.GetChangedFiles(revision!, cts.Token),
-                cts.Token);
+            // Resolved to a non-nullable local before the lambda captures it: null-state analysis does
+            // not flow into a closure, so the comparison branch would not compile against it.
+            Func<IReadOnlyList<GitItemStatus>> read;
+
+            if (isWorkingDirectory)
+            {
+                read = _loader.GetWorkingDirectoryChanges;
+            }
+            else if (CompareTarget?.Revision?.ObjectId is ObjectId compareFrom && revision is not null)
+            {
+                ObjectId to = revision.ObjectId;
+                read = () => _loader.GetChangedFilesBetween(compareFrom, to, cts.Token);
+            }
+            else
+            {
+                read = () => _loader.GetChangedFiles(revision!, cts.Token);
+            }
+
+            IReadOnlyList<GitItemStatus> files = await Task.Run(read, cts.Token);
 
             // The selection may have moved on while we were reading.
             if (!ReferenceEquals(SelectedCommit, commit))
@@ -992,11 +1045,24 @@ public sealed class RepositoryTabViewModel : ObservableObject
             return Task.CompletedTask;
         }
 
+        if (commit.IsWorkingDirectory)
+        {
+            return HistoryDiff.LoadAsync(
+                file.Name,
+                token => Task.Run(() => _loader.GetWorkingDirectoryDiff(file.Name, file.OldName, file.IsStaged), token));
+        }
+
+        // As above: narrowed into a local so the closure captures a non-nullable value.
+        if (CompareTarget?.Revision?.ObjectId is ObjectId compareFrom && commit.Revision is GitRevision revision)
+        {
+            return HistoryDiff.LoadAsync(
+                file.Name,
+                token => _loader.GetDiffTextBetweenAsync(compareFrom, revision.ObjectId, file.Name, file.OldName, token));
+        }
+
         return HistoryDiff.LoadAsync(
             file.Name,
-            token => commit.IsWorkingDirectory
-                ? Task.Run(() => _loader.GetWorkingDirectoryDiff(file.Name, file.OldName, file.IsStaged), token)
-                : _loader.GetDiffTextAsync(commit.Revision!, file.Name, file.OldName, token));
+            token => _loader.GetDiffTextAsync(commit.Revision!, file.Name, file.OldName, token));
     }
 
     /// <remarks>

@@ -18,6 +18,7 @@
             <KeyboardAccelerator Modifiers="Control" Key="T" Invoked="OpenRepositoryAccelerator_Invoked" />
             <KeyboardAccelerator Modifiers="Control" Key="W" Invoked="CloseTabAccelerator_Invoked" />
             <KeyboardAccelerator Modifiers="Control" Key="R" Invoked="RefreshAccelerator_Invoked" />
+            <KeyboardAccelerator Modifiers="Control,Shift" Key="P" Invoked="PaletteAccelerator_Invoked" />
             <!-- Zen is deliberately undiscoverable: no button, hotkey only. -->
             <KeyboardAccelerator Modifiers="Control,Shift" Key="Z" Invoked="ZenAccelerator_Invoked" />
             <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
@@ -88,7 +89,8 @@
         </TabView>
 
         <!-- One view, showing whichever repository the strip has selected. -->
-        <views:RepositoryView Grid.Row="2" Tab="{x:Bind ViewModel.SelectedTab, Mode=OneWay}"
+        <views:RepositoryView Grid.Row="2" x:Name="Repository"
+                              Tab="{x:Bind ViewModel.SelectedTab, Mode=OneWay}"
                               Visibility="{x:Bind ViewModel.TabsVisibility, Mode=OneWay}" />
 
         <!-- First run, or every repository closed. -->

@@ -34,6 +34,15 @@
             <Button Content="Clear search" Click="ClearSearch_Click" VerticalAlignment="Center"
                     Visibility="{x:Bind Tab.QueryVisibility, Mode=OneWay}" />
 
+            <!-- Only present while a comparison is active, so there is always a way back out of it. -->
+            <Button Click="StopComparing_Click" VerticalAlignment="Center"
+                    Visibility="{x:Bind Tab.CompareVisibility, Mode=OneWay}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE711;" FontSize="11" />
+                    <TextBlock Text="{x:Bind Tab.CompareDescription, Mode=OneWay}" />
+                </StackPanel>
+            </Button>
+
             <ProgressRing Width="16" Height="16" VerticalAlignment="Center"
                           IsActive="{x:Bind Tab.IsLoading, Mode=OneWay}" />
             <TextBlock Text="{x:Bind Tab.Status, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" />
@@ -90,6 +99,9 @@
                                         </MenuFlyoutItem>
                                         <MenuFlyoutItem Text="Create tag here…" Click="CreateTag_Click" />
                                         <MenuFlyoutItem Text="Check out this commit" Click="CheckoutCommit_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Compare with the selected commit"
+                                                        Click="CompareWith_Click" />
                                         <MenuFlyoutSeparator />
                                         <MenuFlyoutItem Text="Cherry-pick" Click="CherryPick_Click" />
                                         <MenuFlyoutItem Text="Revert" Click="Revert_Click" />
