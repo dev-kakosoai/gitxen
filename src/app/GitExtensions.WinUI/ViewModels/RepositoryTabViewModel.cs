@@ -17,14 +17,13 @@ namespace GitExtensions.WinUI.ViewModels;
 public sealed class RepositoryTabViewModel : ObservableObject
 {
     /// <summary>
-    ///  How many commits to read per page. A repository like gitextensions itself has ~17,000, and
-    ///  holding them all (with full message bodies) in a bound collection costs far more memory and
-    ///  UI work than a history browser needs.
+    ///  How many commits to read per page, and how many diff lines to render. Configurable in
+    ///  Settings; capped at all because this repository alone has ~17,000 commits, which is more
+    ///  than an unvirtualized bound collection should hold.
     /// </summary>
-    private const int MaxCommits = 2000;
+    private static int MaxCommits => AppOptions.MaxCommits;
 
-    /// <summary>Guards against a huge generated-file diff flooding the list.</summary>
-    private const int MaxDiffLines = 5000;
+    private static int MaxDiffLines => AppOptions.MaxDiffLines;
 
     /// <summary>
     ///  Every loaded commit. <see cref="Commits"/> is the filtered projection actually bound to the
@@ -311,6 +310,75 @@ public sealed class RepositoryTabViewModel : ObservableObject
     public Task<GitOperationResult> StashListAsync() =>
         RunOperationAsync(loader => loader.StashList());
 
+    public Task<GitOperationResult> StashPopAsync() =>
+        RunOperationAsync(loader => loader.StashPop());
+
+    /// <summary>
+    ///  Operations that act on the selected commit. They report rather than throw when nothing is
+    ///  selected, so the menu items never need to be disabled.
+    /// </summary>
+    public Task<GitOperationResult> CherryPickAsync() =>
+        RunOnSelectedCommitAsync("Cherry-pick", (loader, commit) => loader.CherryPick(commit));
+
+    public Task<GitOperationResult> RevertAsync() =>
+        RunOnSelectedCommitAsync("Revert", (loader, commit) => loader.Revert(commit));
+
+    public Task<GitOperationResult> ResetToSelectedAsync(ResetMode mode) =>
+        RunOnSelectedCommitAsync($"Reset ({mode})", (loader, commit) => loader.ResetTo(commit, mode));
+
+    public Task<GitOperationResult> BisectAtSelectedAsync(string action) =>
+        RunOnSelectedCommitAsync($"Bisect {action}", (loader, commit) => loader.Bisect(action, commit));
+
+    public Task<GitOperationResult> RebaseAsync(string onto) =>
+        RunOperationAsync(loader => loader.Rebase(onto));
+
+    public Task<GitOperationResult> ContinueOperationAsync(string operation, string action) =>
+        RunOperationAsync(loader => loader.ContinueOperation(operation, action));
+
+    public Task<GitOperationResult> BisectAsync(string action) =>
+        RunOperationAsync(loader => loader.Bisect(action));
+
+    public Task<IReadOnlyList<string>> GetConflictedFilesAsync() =>
+        Task.Run(_loader.GetConflictedFiles);
+
+    public Task<GitOperationResult> MarkResolvedAsync(string fileName) =>
+        RunOperationAsync(loader => loader.MarkResolved(fileName));
+
+    public Task<GitOperationResult> ListTagsAsync() => RunReadOnlyAsync(loader => loader.ListTags());
+
+    public Task<GitOperationResult> CreateTagAsync(string name, string message) =>
+        RunOperationAsync(loader => loader.CreateTag(name, SelectedCommit?.Revision?.ObjectId, message));
+
+    public Task<GitOperationResult> DeleteTagAsync(string name) =>
+        RunOperationAsync(loader => loader.DeleteTag(name));
+
+    public Task<GitOperationResult> PushTagAsync(string name) =>
+        RunOperationAsync(loader => loader.PushTag(name));
+
+    public Task<GitOperationResult> ListRemotesAsync() => RunReadOnlyAsync(loader => loader.ListRemotes());
+
+    public Task<GitOperationResult> AddRemoteAsync(string name, string url) =>
+        RunOperationAsync(loader => loader.AddRemote(name, url));
+
+    public Task<GitOperationResult> RemoveRemoteAsync(string name) =>
+        RunOperationAsync(loader => loader.RemoveRemote(name));
+
+    public Task<GitOperationResult> ListSubmodulesAsync() => RunReadOnlyAsync(loader => loader.ListSubmodules());
+
+    public Task<GitOperationResult> UpdateSubmodulesAsync() =>
+        RunOperationAsync(loader => loader.UpdateSubmodules());
+
+    public Task<GitOperationResult> SyncSubmodulesAsync() =>
+        RunOperationAsync(loader => loader.SyncSubmodules());
+
+    public Task<GitOperationResult> ListWorktreesAsync() => RunReadOnlyAsync(loader => loader.ListWorktrees());
+
+    public Task<GitOperationResult> AddWorktreeAsync(string path, string branch) =>
+        RunOperationAsync(loader => loader.AddWorktree(path, branch));
+
+    public Task<GitOperationResult> RemoveWorktreeAsync(string path) =>
+        RunOperationAsync(loader => loader.RemoveWorktree(path));
+
     /// <summary>Raw <c>git blame</c> output for the selected file at the selected commit.</summary>
     public Task<string> GetBlameAsync(string fileName)
     {
@@ -506,6 +574,32 @@ public sealed class RepositoryTabViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    private Task<GitOperationResult> RunOnSelectedCommitAsync(string description, Func<RepositoryLoader, ObjectId, GitOperationResult> operation)
+    {
+        if (SelectedCommit?.Revision?.ObjectId is not ObjectId commit)
+        {
+            return Task.FromResult(new GitOperationResult(description, false, "Select a commit first."));
+        }
+
+        return RunOperationAsync(loader => operation(loader, commit));
+    }
+
+    /// <summary>
+    ///  For listing commands, which change nothing and so don't need the reload that
+    ///  <see cref="RunOperationAsync"/> does afterwards.
+    /// </summary>
+    private async Task<GitOperationResult> RunReadOnlyAsync(Func<RepositoryLoader, GitOperationResult> operation)
+    {
+        try
+        {
+            return await Task.Run(() => operation(_loader));
+        }
+        catch (Exception ex)
+        {
+            return new GitOperationResult("Error", false, ex.Message);
         }
     }
 

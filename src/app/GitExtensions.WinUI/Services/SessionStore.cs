@@ -18,6 +18,12 @@ public sealed class SessionState
     /// <summary>Most-recently-opened repositories, newest first.</summary>
     public List<string> Recent { get; set; } = [];
 
+    public int MaxCommits { get; set; } = 2000;
+
+    public int MaxDiffLines { get; set; } = 5000;
+
+    public AppTheme Theme { get; set; } = AppTheme.System;
+
     public WindowBounds? Window { get; set; }
 }
 

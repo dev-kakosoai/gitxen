@@ -1,4 +1,5 @@
 using System.ComponentModel.Design;
+using GitExtensions.Extensibility.Git;
 using GitExtensions.WinUI.Dialogs;
 using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
@@ -37,6 +38,8 @@ public sealed partial class MainWindow : Window
         try
         {
             SessionState state = SessionStore.Load();
+            AppOptions.Apply(state);
+            ApplyTheme();
 
             if (state.Window is WindowBounds bounds && bounds.Width > 0 && bounds.Height > 0)
             {
@@ -55,13 +58,16 @@ public sealed partial class MainWindow : Window
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
         RectInt32 position = new(AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height);
-        SessionStore.Save(ViewModel.CaptureSession(new WindowBounds
+        SessionState state = ViewModel.CaptureSession(new WindowBounds
         {
             X = position.X,
             Y = position.Y,
             Width = position.Width,
             Height = position.Height
-        }));
+        });
+
+        AppOptions.CopyTo(state);
+        SessionStore.Save(state);
     }
 
     private async void OpenRepository_Click(object sender, RoutedEventArgs e) => await PickAndOpenRepositoryAsync();
@@ -231,15 +237,290 @@ public sealed partial class MainWindow : Window
         await ShowMessageAsync("Stashes", string.IsNullOrWhiteSpace(result.Output) ? "No stashes." : result.Output);
     }
 
+    // ---- History operations -------------------------------------------------------------------
+
+    private async void CherryPick_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.CherryPickAsync());
+
+    private async void Revert_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.RevertAsync());
+
+    private async void Rebase_Click(object sender, RoutedEventArgs e)
+    {
+        if (await PromptAsync("Rebase", "Branch or commit to rebase onto", "Rebase") is string onto)
+        {
+            await OnTabAsync(t => t.RebaseAsync(onto));
+        }
+    }
+
+    private async void ResetSoft_Click(object sender, RoutedEventArgs e) => await ResetAsync(ResetMode.Soft);
+
+    private async void ResetMixed_Click(object sender, RoutedEventArgs e) => await ResetAsync(ResetMode.Mixed);
+
+    private async void ResetHard_Click(object sender, RoutedEventArgs e) => await ResetAsync(ResetMode.Hard);
+
+    private async Task ResetAsync(ResetMode mode)
+    {
+        // Hard reset throws away uncommitted work, so it gets a confirmation the others don't need.
+        if (mode == ResetMode.Hard && !await ConfirmAsync(
+            "Hard reset?",
+            "This discards all uncommitted changes in the working directory. This cannot be undone.",
+            "Reset --hard"))
+        {
+            return;
+        }
+
+        await OnTabAsync(t => t.ResetToSelectedAsync(mode));
+    }
+
+    private async void ShowConflicts_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedTab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        IReadOnlyList<string> conflicts = await tab.GetConflictedFilesAsync();
+
+        if (conflicts.Count == 0)
+        {
+            await ShowMessageAsync("Conflicts", "No unresolved conflicts.");
+            return;
+        }
+
+        string? file = await PromptAsync(
+            $"{conflicts.Count} conflicted file(s)",
+            "Type a path to mark resolved, or cancel",
+            "Mark resolved",
+            string.Join(Environment.NewLine, conflicts));
+
+        if (!string.IsNullOrWhiteSpace(file))
+        {
+            await OnTabAsync(t => t.MarkResolvedAsync(file.Trim()));
+        }
+    }
+
+    private async void RebaseContinue_Click(object sender, RoutedEventArgs e) =>
+        await OnTabAsync(t => t.ContinueOperationAsync("rebase", "continue"));
+
+    private async void RebaseSkip_Click(object sender, RoutedEventArgs e) =>
+        await OnTabAsync(t => t.ContinueOperationAsync("rebase", "skip"));
+
+    private async void RebaseAbort_Click(object sender, RoutedEventArgs e) =>
+        await OnTabAsync(t => t.ContinueOperationAsync("rebase", "abort"));
+
+    private async void MergeAbort_Click(object sender, RoutedEventArgs e) =>
+        await OnTabAsync(t => t.ContinueOperationAsync("merge", "abort"));
+
+    private async void BisectStart_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.BisectAsync("start"));
+
+    private async void BisectGood_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.BisectAtSelectedAsync("good"));
+
+    private async void BisectBad_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.BisectAtSelectedAsync("bad"));
+
+    private async void BisectReset_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.BisectAsync("reset"));
+
+    private async void StashPop_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.StashPopAsync());
+
+    // ---- Tags, remotes, submodules, worktrees --------------------------------------------------
+
+    private async void ListTags_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.ListTagsAsync());
+
+    private async void CreateTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (await PromptAsync("Create tag", "Tag name", "Create") is not string name)
+        {
+            return;
+        }
+
+        string? message = await PromptAsync("Create tag", "Optional annotation message", "Create");
+        await OnTabAsync(t => t.CreateTagAsync(name, message ?? ""));
+    }
+
+    private async void DeleteTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (await PromptAsync("Delete tag", "Tag name", "Delete") is string name)
+        {
+            await OnTabAsync(t => t.DeleteTagAsync(name));
+        }
+    }
+
+    private async void PushTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (await PromptAsync("Push tag", "Tag name", "Push") is string name
+            && await ConfirmAsync("Push tag?", $"Push tag '{name}' to the remote?", "Push"))
+        {
+            await OnTabAsync(t => t.PushTagAsync(name));
+        }
+    }
+
+    private async void ListRemotes_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.ListRemotesAsync());
+
+    private async void AddRemote_Click(object sender, RoutedEventArgs e)
+    {
+        if (await PromptAsync("Add remote", "Remote name (e.g. origin)", "Next") is not string name)
+        {
+            return;
+        }
+
+        if (await PromptAsync("Add remote", "Remote URL", "Add") is string url)
+        {
+            await OnTabAsync(t => t.AddRemoteAsync(name, url));
+        }
+    }
+
+    private async void RemoveRemote_Click(object sender, RoutedEventArgs e)
+    {
+        if (await PromptAsync("Remove remote", "Remote name", "Remove") is string name)
+        {
+            await OnTabAsync(t => t.RemoveRemoteAsync(name));
+        }
+    }
+
+    private async void ListSubmodules_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.ListSubmodulesAsync());
+
+    private async void UpdateSubmodules_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.UpdateSubmodulesAsync());
+
+    private async void SyncSubmodules_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.SyncSubmodulesAsync());
+
+    private async void ListWorktrees_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.ListWorktreesAsync());
+
+    private async void AddWorktree_Click(object sender, RoutedEventArgs e)
+    {
+        if (await PromptAsync("Add worktree", "Path for the new worktree", "Next") is not string path)
+        {
+            return;
+        }
+
+        if (await PromptAsync("Add worktree", "Branch to check out there", "Add") is string branch)
+        {
+            await OnTabAsync(t => t.AddWorktreeAsync(path, branch));
+        }
+    }
+
+    private async void RemoveWorktree_Click(object sender, RoutedEventArgs e)
+    {
+        if (await PromptAsync("Remove worktree", "Worktree path", "Remove") is string path)
+        {
+            await OnTabAsync(t => t.RemoveWorktreeAsync(path));
+        }
+    }
+
+    // ---- Settings -------------------------------------------------------------------------------
+
+    private async void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        NumberBox commits = new() { Header = "Commits per page", Value = AppOptions.MaxCommits, Minimum = 100, Maximum = 50_000, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
+        NumberBox diffLines = new() { Header = "Max diff lines", Value = AppOptions.MaxDiffLines, Minimum = 100, Maximum = 200_000, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
+        ComboBox theme = new() { Header = "Theme", ItemsSource = Enum.GetNames<AppTheme>(), SelectedItem = AppOptions.Theme.ToString() };
+
+        StackPanel panel = new() { Spacing = 12, Width = 360 };
+        panel.Children.Add(commits);
+        panel.Children.Add(diffLines);
+        panel.Children.Add(theme);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Page size and diff length apply on the next refresh.",
+            Opacity = 0.7,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        ContentDialog dialog = new()
+        {
+            Title = "Settings",
+            Content = panel,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = RootGrid.XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        AppOptions.MaxCommits = (int)commits.Value;
+        AppOptions.MaxDiffLines = (int)diffLines.Value;
+
+        if (theme.SelectedItem is string selected && Enum.TryParse(selected, out AppTheme parsed))
+        {
+            AppOptions.Theme = parsed;
+            ApplyTheme();
+        }
+    }
+
+    /// <summary>
+    ///  Applied to the root element rather than the app: Application.RequestedTheme can only be set
+    ///  before the first window exists.
+    /// </summary>
+    private void ApplyTheme()
+    {
+        RootGrid.RequestedTheme = AppOptions.Theme switch
+        {
+            AppTheme.Light => ElementTheme.Light,
+            AppTheme.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default
+        };
+
+        // Diff colours are chosen per theme and cached, so they have to be recomputed.
+        DiffLineViewModel.InvalidatePalette();
+    }
+
+    private async Task OnTabAsync(Func<RepositoryTabViewModel, Task<GitOperationResult>> operation)
+    {
+        if (ViewModel.SelectedTab is not RepositoryTabViewModel tab)
+        {
+            await ShowMessageAsync("No repository", "Open a repository first.");
+            return;
+        }
+
+        await ReportAsync(await operation(tab));
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string acceptText)
+    {
+        ContentDialog dialog = new()
+        {
+            Title = title,
+            Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = acceptText,
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = RootGrid.XamlRoot
+        };
+
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
     /// <summary>Single-line text prompt. Returns null if cancelled.</summary>
-    private async Task<string?> PromptAsync(string title, string placeholder, string acceptText)
+    private async Task<string?> PromptAsync(string title, string placeholder, string acceptText, string? context = null)
     {
         TextBox input = new() { PlaceholderText = placeholder };
+
+        object content = input;
+
+        if (context is not null)
+        {
+            StackPanel panel = new() { Spacing = 10, Width = 460 };
+            panel.Children.Add(new ScrollViewer
+            {
+                MaxHeight = 200,
+                Content = new TextBlock
+                {
+                    Text = context,
+                    FontFamily = new FontFamily("Consolas"),
+                    FontSize = 12,
+                    IsTextSelectionEnabled = true
+                }
+            });
+            panel.Children.Add(input);
+            content = panel;
+        }
 
         ContentDialog dialog = new()
         {
             Title = title,
-            Content = input,
+            Content = content,
             PrimaryButtonText = acceptText,
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,

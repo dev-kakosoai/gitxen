@@ -195,6 +195,105 @@ internal sealed class RepositoryLoader
     public GitOperationResult StashList() =>
         Run("Stash list", new GitArgumentBuilder("stash") { "list" });
 
+    public GitOperationResult StashPop() =>
+        Run("Stash pop", new GitArgumentBuilder("stash") { "pop" });
+
+    // ---- History operations -------------------------------------------------------------------
+    // These are all built with GitArgumentBuilder rather than the Commands factories: the factories
+    // take option structs and enums this front-end doesn't model, and the raw arguments are plain
+    // enough to be obviously correct.
+
+    public GitOperationResult CherryPick(ObjectId commit) =>
+        Run($"Cherry-pick {commit.ToShortString()}", new GitArgumentBuilder("cherry-pick") { commit.ToString() });
+
+    public GitOperationResult Revert(ObjectId commit) =>
+        Run($"Revert {commit.ToShortString()}", new GitArgumentBuilder("revert") { "--no-edit", commit.ToString() });
+
+    public GitOperationResult Rebase(string onto) =>
+        Run($"Rebase onto {onto}", new GitArgumentBuilder("rebase") { onto.Quote() });
+
+    public GitOperationResult ResetTo(ObjectId commit, ResetMode mode) =>
+        Run($"Reset ({mode}) to {commit.ToShortString()}", Commands.Reset(mode, commit.ToString()));
+
+    /// <summary>
+    ///  Continue/abort/skip for whichever operation is in progress. The command differs per
+    ///  operation, so the caller says which one it means.
+    /// </summary>
+    public GitOperationResult ContinueOperation(string operation, string action) =>
+        Run($"{operation} --{action}", new GitArgumentBuilder(operation) { $"--{action}" });
+
+    /// <summary>Files with unresolved merge conflicts.</summary>
+    public IReadOnlyList<string> GetConflictedFiles()
+    {
+        ExecutionResult result = _module.GitExecutable.Execute(
+            new GitArgumentBuilder("diff") { "--name-only", "--diff-filter=U" },
+            throwOnErrorExit: false);
+
+        return result.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+    }
+
+    /// <summary>Marks a conflict resolved by staging the file, which is what git means by resolved.</summary>
+    public GitOperationResult MarkResolved(string fileName)
+    {
+        _module.StageFile(fileName);
+        return new GitOperationResult("Resolve", true, $"Marked {fileName} resolved.");
+    }
+
+    public GitOperationResult Bisect(string action, ObjectId? commit = null) =>
+        Run($"Bisect {action}", new GitArgumentBuilder("bisect")
+        {
+            action,
+            { commit is not null, commit?.ToString() ?? "" }
+        });
+
+    // ---- Tags, remotes, submodules, worktrees --------------------------------------------------
+
+    public GitOperationResult ListTags() =>
+        Run("Tags", new GitArgumentBuilder("tag") { "--list", "--sort=-creatordate" });
+
+    public GitOperationResult CreateTag(string name, ObjectId? commit, string message) =>
+        Run($"Create tag {name}", new GitArgumentBuilder("tag")
+        {
+            { !string.IsNullOrWhiteSpace(message), $"-a -m {message.Quote()}" },
+            name.Quote(),
+            { commit is not null, commit?.ToString() ?? "" }
+        });
+
+    public GitOperationResult DeleteTag(string name) =>
+        Run($"Delete tag {name}", new GitArgumentBuilder("tag") { "-d", name.Quote() });
+
+    public GitOperationResult PushTag(string name) =>
+        Run($"Push tag {name}", new GitArgumentBuilder("push") { GetRemote(), $"refs/tags/{name}".Quote() });
+
+    public GitOperationResult ListRemotes() =>
+        Run("Remotes", new GitArgumentBuilder("remote") { "-v" });
+
+    public GitOperationResult AddRemote(string name, string url) =>
+        Run($"Add remote {name}", new GitArgumentBuilder("remote") { "add", name.Quote(), url.Quote() });
+
+    public GitOperationResult RemoveRemote(string name) =>
+        Run($"Remove remote {name}", new GitArgumentBuilder("remote") { "remove", name.Quote() });
+
+    public GitOperationResult ListSubmodules() =>
+        Run("Submodules", new GitArgumentBuilder("submodule") { "status", "--recursive" });
+
+    public GitOperationResult UpdateSubmodules() =>
+        Run("Update submodules", new GitArgumentBuilder("submodule") { "update", "--init", "--recursive" });
+
+    public GitOperationResult SyncSubmodules() =>
+        Run("Sync submodules", new GitArgumentBuilder("submodule") { "sync", "--recursive" });
+
+    public GitOperationResult ListWorktrees() =>
+        Run("Worktrees", new GitArgumentBuilder("worktree") { "list" });
+
+    public GitOperationResult AddWorktree(string path, string branch) =>
+        Run($"Add worktree {path}", new GitArgumentBuilder("worktree") { "add", path.Quote(), branch.Quote() });
+
+    public GitOperationResult RemoveWorktree(string path) =>
+        Run($"Remove worktree {path}", new GitArgumentBuilder("worktree") { "remove", path.Quote() });
+
     public GitOperationResult Fetch() =>
         Run("Fetch", _module.FetchCmd(GetRemote(), remoteBranch: null, localBranch: null));
 

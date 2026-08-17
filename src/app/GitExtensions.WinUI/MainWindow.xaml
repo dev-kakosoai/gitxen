@@ -46,6 +46,65 @@
                             <MenuFlyoutSeparator />
                             <MenuFlyoutItem Text="Stash changes…" Click="StashSave_Click" />
                             <MenuFlyoutItem Text="Show stashes" Click="StashList_Click" />
+                            <MenuFlyoutItem Text="Pop latest stash" Click="StashPop_Click" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Content="History…" Visibility="{x:Bind ViewModel.AdvancedVisibility, Mode=OneWay}">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="Bottom">
+                            <MenuFlyoutItem Text="Cherry-pick selected commit" Click="CherryPick_Click" />
+                            <MenuFlyoutItem Text="Revert selected commit" Click="Revert_Click" />
+                            <MenuFlyoutItem Text="Rebase onto…" Click="Rebase_Click" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutSubItem Text="Reset to selected commit">
+                                <MenuFlyoutItem Text="Soft (keep changes staged)" Click="ResetSoft_Click" />
+                                <MenuFlyoutItem Text="Mixed (keep changes unstaged)" Click="ResetMixed_Click" />
+                                <MenuFlyoutItem Text="Hard (discard changes)" Click="ResetHard_Click" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutSubItem Text="In-progress operation">
+                                <MenuFlyoutItem Text="Show conflicts" Click="ShowConflicts_Click" />
+                                <MenuFlyoutItem Text="Rebase — continue" Click="RebaseContinue_Click" />
+                                <MenuFlyoutItem Text="Rebase — skip" Click="RebaseSkip_Click" />
+                                <MenuFlyoutItem Text="Rebase — abort" Click="RebaseAbort_Click" />
+                                <MenuFlyoutItem Text="Merge — abort" Click="MergeAbort_Click" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSubItem Text="Bisect">
+                                <MenuFlyoutItem Text="Start" Click="BisectStart_Click" />
+                                <MenuFlyoutItem Text="Mark selected good" Click="BisectGood_Click" />
+                                <MenuFlyoutItem Text="Mark selected bad" Click="BisectBad_Click" />
+                                <MenuFlyoutItem Text="Reset" Click="BisectReset_Click" />
+                            </MenuFlyoutSubItem>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Content="Repository…" Visibility="{x:Bind ViewModel.AdvancedVisibility, Mode=OneWay}">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="Bottom">
+                            <MenuFlyoutSubItem Text="Tags">
+                                <MenuFlyoutItem Text="Show tags" Click="ListTags_Click" />
+                                <MenuFlyoutItem Text="Create tag at selected commit…" Click="CreateTag_Click" />
+                                <MenuFlyoutItem Text="Delete tag…" Click="DeleteTag_Click" />
+                                <MenuFlyoutItem Text="Push tag…" Click="PushTag_Click" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSubItem Text="Remotes">
+                                <MenuFlyoutItem Text="Show remotes" Click="ListRemotes_Click" />
+                                <MenuFlyoutItem Text="Add remote…" Click="AddRemote_Click" />
+                                <MenuFlyoutItem Text="Remove remote…" Click="RemoveRemote_Click" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSubItem Text="Submodules">
+                                <MenuFlyoutItem Text="Show submodules" Click="ListSubmodules_Click" />
+                                <MenuFlyoutItem Text="Update (init, recursive)" Click="UpdateSubmodules_Click" />
+                                <MenuFlyoutItem Text="Sync" Click="SyncSubmodules_Click" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSubItem Text="Worktrees">
+                                <MenuFlyoutItem Text="Show worktrees" Click="ListWorktrees_Click" />
+                                <MenuFlyoutItem Text="Add worktree…" Click="AddWorktree_Click" />
+                                <MenuFlyoutItem Text="Remove worktree…" Click="RemoveWorktree_Click" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem Text="Settings…" Click="Settings_Click" />
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
