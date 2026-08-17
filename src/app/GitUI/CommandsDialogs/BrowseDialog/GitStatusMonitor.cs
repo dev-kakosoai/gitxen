@@ -429,6 +429,13 @@ public sealed class GitStatusMonitor : IDisposable
             return;
         }
 
+        if (AppSettings.IsPreviewingSettings)
+        {
+            // Another tab/window is previewing settings changes in a modal dialog; skip this tick
+            // rather than risk reading the temporarily-swapped global settings. Retried on the next tick.
+            return;
+        }
+
         Validates.NotNull(UICommandsSource);
         Validates.NotNull(Module);
 

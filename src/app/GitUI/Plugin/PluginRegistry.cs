@@ -14,7 +14,7 @@ public static class PluginRegistry
 
     public static List<IRepositoryHostPlugin> GitHosters { get; } = [];
 
-    public static bool PluginsRegistered { get; private set; }
+    private static readonly HashSet<IGitUICommands> _registeredCommands = [];
 
     private static bool _isLoaded = false;
 
@@ -104,33 +104,37 @@ public static class PluginRegistry
         return GitHosters.FirstOrDefault(gitHoster => gitHoster.GitModuleIsRelevantToMe());
     }
 
-    public static void Register(IGitUICommands gitUiCommands)
+    public static bool IsRegistered(IGitUICommands gitUiCommands)
     {
-        if (PluginsRegistered)
-        {
-            return;
-        }
-
-        PluginsRegistered = true;
-
         lock (Plugins)
         {
+            return _registeredCommands.Contains(gitUiCommands);
+        }
+    }
+
+    public static void Register(IGitUICommands gitUiCommands)
+    {
+        lock (Plugins)
+        {
+            if (!_registeredCommands.Add(gitUiCommands))
+            {
+                return;
+            }
+
             Plugins.ForEach(p => p.Register(gitUiCommands));
         }
     }
 
     public static void Unregister(IGitUICommands gitUiCommands)
     {
-        if (!PluginsRegistered)
-        {
-            return;
-        }
-
         lock (Plugins)
         {
+            if (!_registeredCommands.Remove(gitUiCommands))
+            {
+                return;
+            }
+
             Plugins.ForEach(p => p.Unregister(gitUiCommands));
         }
-
-        PluginsRegistered = false;
     }
 }

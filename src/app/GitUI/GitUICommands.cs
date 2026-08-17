@@ -625,7 +625,7 @@ public sealed class GitUICommands : IGitUICommands
         // Commit dialog can be opened on its own without the main form
         // If it is opened by itself, we need to ensure plugins are loaded because some of them
         // may have hooks into the commit flow
-        bool werePluginsRegistered = PluginRegistry.PluginsRegistered;
+        bool werePluginsRegistered = PluginRegistry.IsRegistered(this);
 
         try
         {
@@ -1249,15 +1249,22 @@ public sealed class GitUICommands : IGitUICommands
     /// <param name="args">The start up arguments.</param>
     public bool StartBrowseDialog(IWin32Window? owner, BrowseArguments? args = null)
     {
-        FormBrowse form = new(this, args ?? new BrowseArguments());
+        // If a tabbed browse shell is already running, open this repository as a new tab in it
+        // rather than a separate top-level window.
+        if (FormBrowseTabs.TryAddTab(this, args))
+        {
+            return true;
+        }
+
+        FormBrowseTabs shell = new(this, args ?? new BrowseArguments());
 
         if (Application.MessageLoop)
         {
-            form.Show(owner);
+            shell.Show(owner);
         }
         else
         {
-            Application.Run(form);
+            Application.Run(shell);
         }
 
         return true;

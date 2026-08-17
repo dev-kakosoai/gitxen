@@ -195,19 +195,30 @@ public static partial class AppSettings
         set => SetBool("RememberAmendCommitState", value);
     }
 
+    /// <summary>
+    /// True while <see cref="SettingsContainer"/> is temporarily swapped by <see cref="UsingContainer"/>
+    /// (e.g. a settings dialog previewing changes). Modal dialogs pump a nested message loop, so with
+    /// multiple repo tabs open, another tab's background timers can still tick during that window and
+    /// would otherwise transparently read the temporary/preview settings instead of the real ones.
+    /// </summary>
+    public static bool IsPreviewingSettings { get; private set; }
+
     public static void UsingContainer(DistributedSettings settingsContainer, Action action)
     {
         SettingsContainer.LockedAction(() =>
             {
                 DistributedSettings oldSC = SettingsContainer;
+                bool wasPreviewing = IsPreviewingSettings;
                 try
                 {
                     SettingsContainer = settingsContainer;
+                    IsPreviewingSettings = true;
                     action();
                 }
                 finally
                 {
                     SettingsContainer = oldSC;
+                    IsPreviewingSettings = wasPreviewing;
 
                     // refresh settings if needed
                     SettingsContainer.GetString(string.Empty, null);

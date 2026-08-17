@@ -34,11 +34,15 @@ internal sealed class WorkingDirectoryToolStripSplitButton : ToolStripSplitButto
         /// </summary>
         private IGitModule Module => UICommands.Module;
 
+        private readonly ToolStripSplitButton _button;
+
         /// <summary>
-        ///  Gets the active or the first open form.
+        ///  Gets the form that is displaying this button, so dialogs parent to the correct
+        ///  window/tab when multiple repo windows are open at once; falls back to the previous
+        ///  app-wide heuristics only if that can't be determined.
         /// </summary>
-        private static Form? ActiveOrOpenForm
-            => Form.ActiveForm ?? (Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null);
+        private Form? ActiveOrOpenForm
+            => _button.GetCurrentParent()?.FindForm() ?? Form.ActiveForm ?? (Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null);
 
         /// <summary>
         ///  Gets the current instance of the UI commands.
@@ -68,6 +72,8 @@ internal sealed class WorkingDirectoryToolStripSplitButton : ToolStripSplitButto
             StartToolStripMenuItem startToolStripMenuItem,
             ToolStripMenuItem closeToolStripMenuItem)
         {
+            _button = button;
+
             button.ButtonClick += (s, e) => button.ShowDropDown();
             button.DropDownOpening += (s, e) => FillDropDown(button);
             button.MouseUp += MouseUpHandler;

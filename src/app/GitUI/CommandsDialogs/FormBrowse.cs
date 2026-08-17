@@ -227,6 +227,15 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
     private TabPage? _consoleTabPage;
     private OutputHistoryControllerBase? _outputHistoryController;
 
+    /// <summary>
+    /// True when this repo session is the one currently shown to the user. When multiple repo
+    /// sessions are open as tabs (<see cref="FormBrowseTabs"/>), only the foreground tab should
+    /// drive shared, process-wide Windows resources: taskbar overlay icon, jump list, thumbnail
+    /// toolbar. Defaults to <see langword="true"/> so a standalone (non-tabbed) <see cref="FormBrowse"/>
+    /// instance, e.g. the modeless window used for file-history browsing, behaves exactly as before.
+    /// </summary>
+    public bool IsForegroundTab { get; private set; } = true;
+
     private readonly Dictionary<Brush, Icon> _overlayIconByBrush = [];
 
     private UpdateTargets _selectedRevisionUpdatedTargets = UpdateTargets.None;
@@ -360,7 +369,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
                     // fall back to operation without info in the button
                     UpdateCommitButtonAndGetBrush(null, showCount: false);
                     RevisionGrid.UpdateArtificialCommitCount(null);
-                    if (EnvUtils.RunningOnWindowsWithMainWindow())
+                    if (IsForegroundTab && EnvUtils.RunningOnWindowsWithMainWindow())
                     {
                         TaskbarManager.Instance.SetOverlayIcon(null, "");
                     }
@@ -407,7 +416,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
                 void UpdateStatusInTaskbar()
                 {
-                    if (!EnvUtils.RunningOnWindowsWithMainWindow())
+                    if (!IsForegroundTab || !EnvUtils.RunningOnWindowsWithMainWindow())
                     {
                         return;
                     }
@@ -560,7 +569,42 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     protected override void OnActivated(EventArgs e)
     {
-        // wait for windows to really be displayed, which isn't necessarily the case in OnLoad()
+        RefreshJumpListForActivation();
+
+        this.InvokeAndForget(OnActivate);
+        base.OnActivated(e);
+    }
+
+    protected override void OnDeactivate(EventArgs e)
+    {
+        bool formDeactivatedByOwnModalDialog = ActiveForm is not null;
+        RefreshJumpListForDeactivation(formDeactivatedByOwnModalDialog);
+
+        base.OnDeactivate(e);
+    }
+
+    /// <summary>
+    /// Called by the hosting tab shell (<see cref="FormBrowseTabs"/>) when this repo session's tab
+    /// gains or loses focus. Embedded (non-top-level) forms don't receive WM_ACTIVATE, so tab
+    /// switches can't rely on <see cref="OnActivated"/>/<see cref="OnDeactivate"/> firing on their own.
+    /// </summary>
+    public void SetForeground(bool isForeground)
+    {
+        IsForegroundTab = isForeground;
+
+        if (isForeground)
+        {
+            RefreshJumpListForActivation();
+        }
+        else
+        {
+            RefreshJumpListForDeactivation(formDeactivatedByOwnModalDialog: false);
+        }
+    }
+
+    // wait for windows to really be displayed, which isn't necessarily the case in OnLoad()
+    private void RefreshJumpListForActivation()
+    {
         if (_windowsJumpListManager.NeedsJumpListCreation)
         {
             _windowsJumpListManager.CreateJumpList(
@@ -573,17 +617,11 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         }
 
         _windowsJumpListManager.EnableThumbnailToolbar(_dashboard?.Visible is not true && Module.IsValidGitWorkingDir());
-
-        this.InvokeAndForget(OnActivate);
-        base.OnActivated(e);
     }
 
-    protected override void OnDeactivate(EventArgs e)
+    private void RefreshJumpListForDeactivation(bool formDeactivatedByOwnModalDialog)
     {
-        bool formDeactivatedByOwnModalDialog = ActiveForm is not null;
         _windowsJumpListManager.EnableThumbnailToolbar(!formDeactivatedByOwnModalDialog && _dashboard?.Visible is not true && Module.IsValidGitWorkingDir());
-
-        base.OnDeactivate(e);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -782,7 +820,10 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void ShowDashboard()
     {
-        _windowsJumpListManager.EnableThumbnailToolbar(false);
+        if (IsForegroundTab)
+        {
+            _windowsJumpListManager.EnableThumbnailToolbar(false);
+        }
 
         toolPanel.SuspendLayout();
         toolPanel.TopToolStripPanelVisible = false;
@@ -1049,7 +1090,10 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
             if (validBrowseDir)
             {
-                _windowsJumpListManager.AddToRecent(Module.WorkingDir);
+                if (IsForegroundTab)
+                {
+                    _windowsJumpListManager.AddToRecent(Module.WorkingDir);
+                }
 
                 // add Navigate and View menu
                 _formBrowseMenus.ResetMenuCommandSets();
@@ -1082,7 +1126,10 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
                 }
             }
 
-            _windowsJumpListManager.EnableThumbnailToolbar(validBrowseDir);
+            if (IsForegroundTab)
+            {
+                _windowsJumpListManager.EnableThumbnailToolbar(validBrowseDir);
+            }
 
             UICommands.RaisePostBrowseInitialize(this);
         }

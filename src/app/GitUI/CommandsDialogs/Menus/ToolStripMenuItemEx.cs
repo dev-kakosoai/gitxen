@@ -23,8 +23,13 @@ internal abstract class ToolStripMenuItemEx : ToolStripMenuItem, ITranslate
     /// <summary>
     ///  Gets the form that is displaying the menu item.
     /// </summary>
-    protected static Form? OwnerForm
-        => Form.ActiveForm ?? (Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null);
+    /// <remarks>
+    ///  Resolved from this specific item's containing toolstrip first, so it targets the correct
+    ///  window when multiple repo windows/tabs are open at once; falls back to the previous
+    ///  app-wide heuristics only if that can't be determined.
+    /// </remarks>
+    protected Form? OwnerForm
+        => GetCurrentParent()?.FindForm() ?? Form.ActiveForm ?? (Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null);
 
     /// <summary>
     ///  Initializes the menu item.

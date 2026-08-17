@@ -55,6 +55,11 @@ public sealed class LocalRepositoryManager : ILocalRepositoryManager
     private readonly IRepositoryStorage _repositoryStorage;
     private readonly IRepositoryHistoryMigrator _repositoryHistoryMigrator;
 
+    // Guards the read-modify-write sequences below so that concurrently open repo tabs/windows
+    // updating the same persisted history don't race and clobber each other's changes.
+    private readonly SemaphoreSlim _recentHistoryLock = new(1, 1);
+    private readonly SemaphoreSlim _favouriteHistoryLock = new(1, 1);
+
     public LocalRepositoryManager(IRepositoryStorage repositoryStorage, IRepositoryHistoryMigrator repositoryHistoryMigrator)
     {
         _repositoryStorage = repositoryStorage;
@@ -98,28 +103,37 @@ public sealed class LocalRepositoryManager : ILocalRepositoryManager
         async Task<IList<Repository>> AddAsMostRecentRepositoryAsync(string path)
         {
             await TaskScheduler.Default;
-            IList<Repository> repositoryHistory = await LoadRecentHistoryAsync();
 
-            Repository? repository = repositoryHistory.FirstOrDefault(r => r.Path.Equals(path, StringComparison.CurrentCultureIgnoreCase));
-            if (repository is not null)
+            await _recentHistoryLock.WaitAsync();
+            try
             {
-                if (repositoryHistory[0] == repository)
+                IList<Repository> repositoryHistory = await LoadRecentHistoryAsync();
+
+                Repository? repository = repositoryHistory.FirstOrDefault(r => r.Path.Equals(path, StringComparison.CurrentCultureIgnoreCase));
+                if (repository is not null)
                 {
-                    return repositoryHistory;
+                    if (repositoryHistory[0] == repository)
+                    {
+                        return repositoryHistory;
+                    }
+
+                    repositoryHistory.Remove(repository);
+                }
+                else
+                {
+                    repository = new Repository(path);
                 }
 
-                repositoryHistory.Remove(repository);
+                repositoryHistory.Insert(0, repository);
+
+                await SaveRecentHistoryAsync(repositoryHistory);
+
+                return repositoryHistory;
             }
-            else
+            finally
             {
-                repository = new Repository(path);
+                _recentHistoryLock.Release();
             }
-
-            repositoryHistory.Insert(0, repository);
-
-            await SaveRecentHistoryAsync(repositoryHistory);
-
-            return repositoryHistory;
         }
     }
 
@@ -138,32 +152,40 @@ public sealed class LocalRepositoryManager : ILocalRepositoryManager
 
         await TaskScheduler.Default;
 
-        IList<Repository> favourites = await LoadFavouriteHistoryAsync();
-        Repository? favourite = favourites.FirstOrDefault(f => string.Equals(f.Path, repository.Path, StringComparison.OrdinalIgnoreCase));
+        await _favouriteHistoryLock.WaitAsync();
+        try
+        {
+            IList<Repository> favourites = await LoadFavouriteHistoryAsync();
+            Repository? favourite = favourites.FirstOrDefault(f => string.Equals(f.Path, repository.Path, StringComparison.OrdinalIgnoreCase));
 
-        if (favourite is null)
-        {
-            if (!string.IsNullOrWhiteSpace(category))
+            if (favourite is null)
             {
-                repository.Category = category;
-                favourites.Add(repository);
-            }
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(category))
-            {
-                favourites.Remove(favourite);
+                if (!string.IsNullOrWhiteSpace(category))
+                {
+                    repository.Category = category;
+                    favourites.Add(repository);
+                }
             }
             else
             {
-                favourite.Category = category;
+                if (string.IsNullOrWhiteSpace(category))
+                {
+                    favourites.Remove(favourite);
+                }
+                else
+                {
+                    favourite.Category = category;
+                }
             }
+
+            await SaveFavouriteHistoryAsync(favourites);
+
+            return favourites;
         }
-
-        await SaveFavouriteHistoryAsync(favourites);
-
-        return favourites;
+        finally
+        {
+            _favouriteHistoryLock.Release();
+        }
     }
 
     /// <summary>
@@ -219,20 +241,29 @@ public sealed class LocalRepositoryManager : ILocalRepositoryManager
         }
 
         await TaskScheduler.Default;
-        IList<Repository> repositoryHistory = await LoadFavouriteHistoryAsync();
-        Repository? repository = repositoryHistory.FirstOrDefault(r => r.Path.Equals(repositoryPath, StringComparison.CurrentCultureIgnoreCase));
-        if (repository is null)
+
+        await _favouriteHistoryLock.WaitAsync();
+        try
         {
+            IList<Repository> repositoryHistory = await LoadFavouriteHistoryAsync();
+            Repository? repository = repositoryHistory.FirstOrDefault(r => r.Path.Equals(repositoryPath, StringComparison.CurrentCultureIgnoreCase));
+            if (repository is null)
+            {
+                return repositoryHistory;
+            }
+
+            if (!repositoryHistory.Remove(repository))
+            {
+                return repositoryHistory;
+            }
+
+            await SaveFavouriteHistoryAsync(repositoryHistory);
             return repositoryHistory;
         }
-
-        if (!repositoryHistory.Remove(repository))
+        finally
         {
-            return repositoryHistory;
+            _favouriteHistoryLock.Release();
         }
-
-        await SaveFavouriteHistoryAsync(repositoryHistory);
-        return repositoryHistory;
     }
 
     /// <summary>
@@ -249,20 +280,29 @@ public sealed class LocalRepositoryManager : ILocalRepositoryManager
         }
 
         await TaskScheduler.Default;
-        IList<Repository> repositoryHistory = await LoadRecentHistoryAsync();
-        Repository? repository = repositoryHistory.FirstOrDefault(r => r.Path.Equals(repositoryPath, StringComparison.CurrentCultureIgnoreCase));
-        if (repository is null)
+
+        await _recentHistoryLock.WaitAsync();
+        try
         {
+            IList<Repository> repositoryHistory = await LoadRecentHistoryAsync();
+            Repository? repository = repositoryHistory.FirstOrDefault(r => r.Path.Equals(repositoryPath, StringComparison.CurrentCultureIgnoreCase));
+            if (repository is null)
+            {
+                return repositoryHistory;
+            }
+
+            if (!repositoryHistory.Remove(repository))
+            {
+                return repositoryHistory;
+            }
+
+            await SaveRecentHistoryAsync(repositoryHistory);
             return repositoryHistory;
         }
-
-        if (!repositoryHistory.Remove(repository))
+        finally
         {
-            return repositoryHistory;
+            _recentHistoryLock.Release();
         }
-
-        await SaveRecentHistoryAsync(repositoryHistory);
-        return repositoryHistory;
     }
 
     /// <summary>
@@ -324,32 +364,48 @@ public sealed class LocalRepositoryManager : ILocalRepositoryManager
 
         await TaskScheduler.Default;
 
-        IList<Repository> recentRepositoryHistory = await LoadRecentHistoryAsync();
-        int existingRecentCount = recentRepositoryHistory.Count;
-        List<Repository> invalidRecentRepositories = [.. recentRepositoryHistory.Where(repo => !predicate(repo.Path))];
-
-        foreach (Repository repo in invalidRecentRepositories)
+        await _recentHistoryLock.WaitAsync();
+        try
         {
-            recentRepositoryHistory.Remove(repo);
+            IList<Repository> recentRepositoryHistory = await LoadRecentHistoryAsync();
+            int existingRecentCount = recentRepositoryHistory.Count;
+            List<Repository> invalidRecentRepositories = [.. recentRepositoryHistory.Where(repo => !predicate(repo.Path))];
+
+            foreach (Repository repo in invalidRecentRepositories)
+            {
+                recentRepositoryHistory.Remove(repo);
+            }
+
+            if (existingRecentCount != recentRepositoryHistory.Count)
+            {
+                await SaveRecentHistoryAsync(recentRepositoryHistory);
+            }
+        }
+        finally
+        {
+            _recentHistoryLock.Release();
         }
 
-        if (existingRecentCount != recentRepositoryHistory.Count)
+        await _favouriteHistoryLock.WaitAsync();
+        try
         {
-            await SaveRecentHistoryAsync(recentRepositoryHistory);
+            IList<Repository> favouriteRepositoryHistory = await LoadFavouriteHistoryAsync();
+            int existingFavouriteCount = favouriteRepositoryHistory.Count;
+            List<Repository> invalidFavouriteRepositories = [.. favouriteRepositoryHistory.Where(repo => !predicate(repo.Path))];
+
+            foreach (Repository repo in invalidFavouriteRepositories)
+            {
+                favouriteRepositoryHistory.Remove(repo);
+            }
+
+            if (existingFavouriteCount != favouriteRepositoryHistory.Count)
+            {
+                await SaveFavouriteHistoryAsync(favouriteRepositoryHistory);
+            }
         }
-
-        IList<Repository> favouriteRepositoryHistory = await LoadFavouriteHistoryAsync();
-        int existingFavouriteCount = favouriteRepositoryHistory.Count;
-        List<Repository> invalidFavouriteRepositories = [.. favouriteRepositoryHistory.Where(repo => !predicate(repo.Path))];
-
-        foreach (Repository repo in invalidFavouriteRepositories)
+        finally
         {
-            favouriteRepositoryHistory.Remove(repo);
-        }
-
-        if (existingFavouriteCount != favouriteRepositoryHistory.Count)
-        {
-            await SaveFavouriteHistoryAsync(favouriteRepositoryHistory);
+            _favouriteHistoryLock.Release();
         }
     }
 }
