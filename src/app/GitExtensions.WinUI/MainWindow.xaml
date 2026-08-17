@@ -69,6 +69,10 @@
                                 <MenuFlyoutItem Text="Rebase — skip" Click="RebaseSkip_Click" />
                                 <MenuFlyoutItem Text="Rebase — abort" Click="RebaseAbort_Click" />
                                 <MenuFlyoutItem Text="Merge — abort" Click="MergeAbort_Click" />
+                                <!-- Cherry-pick and revert conflict just as readily as a rebase. -->
+                                <MenuFlyoutItem Text="Cherry-pick — continue" Click="CherryPickContinue_Click" />
+                                <MenuFlyoutItem Text="Cherry-pick — abort" Click="CherryPickAbort_Click" />
+                                <MenuFlyoutItem Text="Revert — abort" Click="RevertAbort_Click" />
                             </MenuFlyoutSubItem>
                             <MenuFlyoutSubItem Text="Bisect">
                                 <MenuFlyoutItem Text="Start" Click="BisectStart_Click" />

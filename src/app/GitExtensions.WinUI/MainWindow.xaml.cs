@@ -310,6 +310,15 @@ public sealed partial class MainWindow : Window
     private async void MergeAbort_Click(object sender, RoutedEventArgs e) =>
         await OnTabAsync(t => t.ContinueOperationAsync("merge", "abort"));
 
+    private async void CherryPickContinue_Click(object sender, RoutedEventArgs e) =>
+        await OnTabAsync(t => t.ContinueOperationAsync("cherry-pick", "continue"));
+
+    private async void CherryPickAbort_Click(object sender, RoutedEventArgs e) =>
+        await OnTabAsync(t => t.ContinueOperationAsync("cherry-pick", "abort"));
+
+    private async void RevertAbort_Click(object sender, RoutedEventArgs e) =>
+        await OnTabAsync(t => t.ContinueOperationAsync("revert", "abort"));
+
     private async void BisectStart_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.BisectAsync("start"));
 
     private async void BisectGood_Click(object sender, RoutedEventArgs e) => await OnTabAsync(t => t.BisectAtSelectedAsync("good"));
