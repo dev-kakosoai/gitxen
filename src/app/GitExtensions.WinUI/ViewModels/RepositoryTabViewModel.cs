@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using GitExtensions.Extensibility.Git;
+using GitExtensions.WinUI.Graph;
 using GitExtensions.WinUI.Services;
 using GitUIPluginInterfaces;
 using Microsoft.UI.Dispatching;
@@ -32,6 +33,9 @@ public sealed class RepositoryTabViewModel : ObservableObject
 
     private readonly RepositoryLoader _loader;
     private readonly DispatcherQueue _dispatcherQueue;
+
+    /// <summary>Rebuilt from scratch on a full reload; kept across pages so lanes stay continuous.</summary>
+    private CommitGraphBuilder _graphBuilder = new();
     private CancellationTokenSource? _loadCts;
     private CancellationTokenSource? _changedFilesCts;
     private CancellationTokenSource? _diffCts;
@@ -69,6 +73,12 @@ public sealed class RepositoryTabViewModel : ObservableObject
     public ObservableCollection<DiffLineViewModel> DiffLines { get; } = [];
 
     public ObservableCollection<string> Branches { get; } = [];
+
+    /// <summary>
+    ///  Width of the graph column. Duplicated from the row view model because the column header
+    ///  spacer binds against this tab, not against a row.
+    /// </summary>
+    public double GraphColumnWidth => CommitGraphBuilder.ColumnWidth;
 
     /// <summary>Free-text filter over the loaded commits.</summary>
     public string Filter
@@ -232,6 +242,23 @@ public sealed class RepositoryTabViewModel : ObservableObject
     public Task<GitOperationResult> CommitAllAsync(string message) =>
         RunOperationAsync(loader => loader.CommitAll(message));
 
+    /// <summary>Commits only what is staged, so partial commits are possible.</summary>
+    public Task<GitOperationResult> CommitStagedAsync(string message, bool amend, bool signOff) =>
+        RunOperationAsync(loader => loader.Commit(message, amend, signOff));
+
+    public Task<string> GetLastCommitMessageAsync() => Task.Run(_loader.GetLastCommitMessage);
+
+    /// <summary>The working-directory changes split by whether they are staged.</summary>
+    public Task<IReadOnlyList<ChangedFileViewModel>> GetWorkingDirectoryFilesAsync() =>
+        Task.Run<IReadOnlyList<ChangedFileViewModel>>(
+            () => _loader.GetWorkingDirectoryChanges()
+                .Select(file => new ChangedFileViewModel(file, isWorkingDirectory: true))
+                .ToList());
+
+    /// <summary>Stages or unstages without the full reload a normal operation triggers.</summary>
+    public Task<GitOperationResult> SetStagedAsync(string fileName, bool staged) =>
+        Task.Run(() => staged ? _loader.StageFile(fileName) : _loader.UnstageFile(fileName));
+
     public Task<GitOperationResult> StageAsync(string fileName) =>
         RunOperationAsync(loader => loader.StageFile(fileName));
 
@@ -291,6 +318,10 @@ public sealed class RepositoryTabViewModel : ObservableObject
             _allCommits.Clear();
             Commits.Clear();
             ChangedFiles.Clear();
+
+            // Lanes are only meaningful relative to the commits already placed, so a full reload
+            // starts the graph over.
+            _graphBuilder = new CommitGraphBuilder();
         }
 
         try
@@ -338,7 +369,7 @@ public sealed class RepositoryTabViewModel : ObservableObject
                 return false;
             }
 
-            CommitRowViewModel row = new(revision);
+            CommitRowViewModel row = new(revision) { GraphSegments = _graphBuilder.AddCommit(revision) };
             _allCommits.Add(row);
 
             if (PassesFilter(row))

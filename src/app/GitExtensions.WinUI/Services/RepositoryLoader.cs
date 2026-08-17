@@ -175,11 +175,6 @@ internal sealed class RepositoryLoader
     /// </summary>
     public GitOperationResult CommitAll(string message)
     {
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            return new GitOperationResult("Commit", false, "A commit message is required.");
-        }
-
         IReadOnlyList<GitItemStatus> changes = _module.GetAllChangedFiles();
         if (changes.Count == 0)
         {
@@ -191,6 +186,30 @@ internal sealed class RepositoryLoader
             return new GitOperationResult("Stage", false, stageOutput);
         }
 
+        return Commit(message, amend: false, signOff: false);
+    }
+
+    /// <summary>The message of HEAD, for pre-filling an amend.</summary>
+    public string GetLastCommitMessage()
+    {
+        ExecutionResult result = _module.GitExecutable.Execute(
+            new GitArgumentBuilder("log") { "-1", "--pretty=%B" },
+            throwOnErrorExit: false);
+
+        return result.ExitedSuccessfully ? result.StandardOutput.TrimEnd() : "";
+    }
+
+    /// <summary>
+    ///  Commits whatever is currently staged. Staging is the caller's business, which is what makes
+    ///  partial commits possible.
+    /// </summary>
+    public GitOperationResult Commit(string message, bool amend, bool signOff)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return new GitOperationResult("Commit", false, "A commit message is required.");
+        }
+
         // git reads the message from a file so multi-line messages and quoting are git's problem,
         // not ours.
         string messageFile = Path.Combine(Path.GetTempPath(), $"gitextensions-winui-commit-{Guid.NewGuid():N}.txt");
@@ -200,8 +219,8 @@ internal sealed class RepositoryLoader
             File.WriteAllText(messageFile, message, Encoding.UTF8);
 
             return Run("Commit", Commands.Commit(
-                amend: false,
-                signOff: false,
+                amend: amend,
+                signOff: signOff,
                 author: "",
                 useExplicitCommitMessage: true,
                 commitMessageFile: messageFile,

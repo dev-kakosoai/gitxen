@@ -1,3 +1,4 @@
+using GitExtensions.WinUI.Graph;
 using GitUIPluginInterfaces;
 
 namespace GitExtensions.WinUI;
@@ -31,6 +32,14 @@ public sealed class CommitRowViewModel
 
     /// <summary>The underlying revision; null for the synthetic working-directory row.</summary>
     public GitRevision? Revision { get; }
+
+    /// <summary>Pre-built lane drawing for this row; empty for the working-directory row.</summary>
+    public IReadOnlyList<GraphSegment> GraphSegments { get; init; } = [];
+
+    /// <summary>Fixed so the lane geometry lines up from row to row.</summary>
+    public double RowHeight => CommitGraphBuilder.RowHeight;
+
+    public double GraphColumnWidth => CommitGraphBuilder.ColumnWidth;
 
     /// <summary>
     ///  True for the pseudo-row at the top of the list representing uncommitted changes.

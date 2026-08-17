@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:GitExtensions.WinUI"
+    xmlns:graph="using:GitExtensions.WinUI.Graph"
     xmlns:vm="using:GitExtensions.WinUI.ViewModels">
 
     <Grid x:Name="RootGrid" RowDefinitions="Auto,*"
@@ -88,13 +89,15 @@
                                            Opacity="0.75" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
 
-                            <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto" Padding="24,0,24,6"
+                            <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Padding="24,0,24,6"
                                   Visibility="{x:Bind ChromeVisibility, Mode=OneWay}">
-                                <TextBlock Text="Hash" Width="92" FontWeight="SemiBold" Opacity="0.7" />
-                                <TextBlock Grid.Column="1" Text="Author" Width="170" FontWeight="SemiBold" Opacity="0.7"
+                                <!-- Spacer matching the graph column so the headers line up with the rows. -->
+                                <Border Width="{x:Bind GraphColumnWidth}" />
+                                <TextBlock Grid.Column="1" Text="Hash" Width="92" FontWeight="SemiBold" Opacity="0.7" />
+                                <TextBlock Grid.Column="2" Text="Author" Width="170" FontWeight="SemiBold" Opacity="0.7"
                                            Visibility="{x:Bind SecondaryColumnVisibility, Mode=OneWay}" />
-                                <TextBlock Grid.Column="2" Text="Subject" FontWeight="SemiBold" Opacity="0.7" />
-                                <TextBlock Grid.Column="3" Text="Date" Width="150" FontWeight="SemiBold" Opacity="0.7"
+                                <TextBlock Grid.Column="3" Text="Subject" FontWeight="SemiBold" Opacity="0.7" />
+                                <TextBlock Grid.Column="4" Text="Date" Width="150" FontWeight="SemiBold" Opacity="0.7"
                                            Visibility="{x:Bind SecondaryColumnVisibility, Mode=OneWay}" />
                             </Grid>
 
@@ -109,13 +112,32 @@
                                     </ListView.Footer>
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="local:CommitRowViewModel">
-                                            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-                                                <TextBlock Text="{x:Bind ShortHash}" Width="92" FontFamily="Consolas" Opacity="0.8" />
-                                                <TextBlock Grid.Column="1" Text="{x:Bind Author}" Width="170"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Grid.Column="2" Text="{x:Bind Subject}"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Grid.Column="3" Text="{x:Bind Date}" Width="150" Opacity="0.7" />
+                                            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Height="{x:Bind RowHeight}">
+                                                <!-- Lane drawing: one Path per colour, positioned in a Canvas
+                                                     whose coordinate space matches RowHeight. -->
+                                                <ItemsControl ItemsSource="{x:Bind GraphSegments}"
+                                                              Width="{x:Bind GraphColumnWidth}"
+                                                              VerticalAlignment="Stretch">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <Canvas />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="graph:GraphSegment">
+                                                            <Path Data="{x:Bind Geometry}" Stroke="{x:Bind Stroke}"
+                                                                  Fill="{x:Bind Fill}" StrokeThickness="2" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <TextBlock Grid.Column="1" Text="{x:Bind ShortHash}" Width="92"
+                                                           VerticalAlignment="Center" FontFamily="Consolas" Opacity="0.8" />
+                                                <TextBlock Grid.Column="2" Text="{x:Bind Author}" Width="170"
+                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="3" Text="{x:Bind Subject}"
+                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="4" Text="{x:Bind Date}" Width="150"
+                                                           VerticalAlignment="Center" Opacity="0.7" />
                                             </Grid>
                                         </DataTemplate>
                                     </ListView.ItemTemplate>

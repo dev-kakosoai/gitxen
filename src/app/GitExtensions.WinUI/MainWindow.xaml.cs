@@ -1,4 +1,5 @@
 using System.ComponentModel.Design;
+using GitExtensions.WinUI.Dialogs;
 using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
 using Microsoft.UI.Xaml;
@@ -281,53 +282,13 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        TextBox messageBox = new()
-        {
-            PlaceholderText = "Commit message",
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            Height = 110
-        };
+        CommitDialog dialog = new(tab, RootGrid.XamlRoot);
+        GitOperationResult? result = await dialog.ShowAndCommitAsync();
 
-        StackPanel panel = new() { Spacing = 10 };
-        panel.Children.Add(new TextBlock
+        if (result is not null)
         {
-            // Be explicit that this stages everything — there is no partial staging here.
-            Text = $"All {pending.Count} changed file(s) will be staged and committed:",
-            TextWrapping = TextWrapping.Wrap
-        });
-        panel.Children.Add(new ScrollViewer
-        {
-            MaxHeight = 160,
-            Content = new TextBlock
-            {
-                Text = string.Join(Environment.NewLine, pending),
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = 12,
-                IsTextSelectionEnabled = true
-            }
-        });
-        panel.Children.Add(messageBox);
-
-        ContentDialog dialog = new()
-        {
-            Title = $"Commit to {tab.Branch}",
-            Content = panel,
-            PrimaryButtonText = "Stage all & commit",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = RootGrid.XamlRoot
-        };
-
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
-        {
-            return;
+            await ReportAsync(result);
         }
-
-        GitOperationResult result = await tab.CommitAllAsync(messageBox.Text);
-        await ShowMessageAsync(
-            result.Succeeded ? "Commit succeeded" : "Commit failed",
-            string.IsNullOrWhiteSpace(result.Output) ? "Done." : result.Output);
     }
 
     private async void Fetch_Click(object sender, RoutedEventArgs e) =>
