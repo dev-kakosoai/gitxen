@@ -24,6 +24,8 @@ public sealed class SessionState
 
     public AppTheme Theme { get; set; } = AppTheme.System;
 
+    public RepositoryLayout Layout { get; set; } = RepositoryLayout.Tabs;
+
     public WindowBounds? Window { get; set; }
 }
 

@@ -7,6 +7,16 @@ public enum AppTheme
     Dark
 }
 
+/// <summary>How the open repositories are listed.</summary>
+public enum RepositoryLayout
+{
+    /// <summary>A tab strip across the top, like a browser.</summary>
+    Tabs,
+
+    /// <summary>A column down the left, which suits long repository names and many repositories.</summary>
+    Sidebar
+}
+
 /// <summary>
 ///  User-adjustable settings, loaded from the session file at startup.
 /// </summary>
@@ -23,12 +33,16 @@ public static class AppOptions
 
     public static AppTheme Theme { get; set; } = AppTheme.System;
 
+    /// <summary>Tabs across the top, or a column down the left.</summary>
+    public static RepositoryLayout Layout { get; set; } = RepositoryLayout.Tabs;
+
     public static void Apply(SessionState state)
     {
         // Guard against a hand-edited session file putting in something unusable.
         MaxCommits = Math.Clamp(state.MaxCommits, 100, 50_000);
         MaxDiffLines = Math.Clamp(state.MaxDiffLines, 100, 200_000);
         Theme = state.Theme;
+        Layout = state.Layout;
     }
 
     public static void CopyTo(SessionState state)
@@ -36,5 +50,6 @@ public static class AppOptions
         state.MaxCommits = MaxCommits;
         state.MaxDiffLines = MaxDiffLines;
         state.Theme = Theme;
+        state.Layout = Layout;
     }
 }

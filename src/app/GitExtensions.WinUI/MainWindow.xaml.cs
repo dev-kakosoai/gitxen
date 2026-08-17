@@ -1,6 +1,7 @@
 using System.ComponentModel.Design;
 using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
+using GitExtensions.WinUI.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -62,7 +63,7 @@ public sealed partial class MainWindow : Window
             await ViewModel.RestoreSessionAsync(state);
 
             SyncModeBar();
-            RefreshRecentFlyout();
+            await Home.RefreshAsync();
         }
         catch (Exception ex)
         {
@@ -85,49 +86,41 @@ public sealed partial class MainWindow : Window
         SessionStore.Save(state);
     }
 
-    private async void OpenRepository_Click(object sender, RoutedEventArgs e) => await PickAndOpenRepositoryAsync();
-
-    private async void OpenRepository_SplitClick(SplitButton sender, SplitButtonClickEventArgs args) =>
-        await PickAndOpenRepositoryAsync();
-
     private async void RepositoryTabs_AddTabButtonClick(TabView sender, object args) =>
         await PickAndOpenRepositoryAsync();
 
-    /// <summary>Rebuilds the recent-repositories menu each time it changes, so it never goes stale.</summary>
-    private void RefreshRecentFlyout()
+    private async void AddRepository_Click(object sender, RoutedEventArgs e) =>
+        await PickAndOpenRepositoryAsync();
+
+    /// <summary>
+    ///  Runs an action the Home page asked for. These need a window handle for their file pickers,
+    ///  which only the window has.
+    /// </summary>
+    private async void Home_ActionRequested(object? sender, HomeAction action)
     {
-        RecentFlyout.Items.Clear();
-
-        MenuFlyoutItem clone = new() { Text = "Clone from URL…" };
-        clone.Click += (_, _) => _ = CloneAsync();
-        RecentFlyout.Items.Add(clone);
-
-        MenuFlyoutItem init = new() { Text = "Create an empty repository…" };
-        init.Click += (_, _) => _ = InitAsync();
-        RecentFlyout.Items.Add(init);
-
-        RecentFlyout.Items.Add(new MenuFlyoutSeparator());
-
-        if (ViewModel.Recent.Count == 0)
+        switch (action)
         {
-            RecentFlyout.Items.Add(new MenuFlyoutItem { Text = "No recent repositories", IsEnabled = false });
-            return;
+            case HomeAction.OpenRepository:
+                await PickAndOpenRepositoryAsync();
+                break;
+
+            case HomeAction.Clone:
+                await CloneAsync();
+                break;
+
+            case HomeAction.Initialise:
+                await InitAsync();
+                break;
         }
+    }
 
-        foreach (string path in ViewModel.Recent)
+    private async void Home_OpenRequested(object? sender, string path) => await OpenRecentAsync(path);
+
+    private void CloseRepository_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ShellTab tab })
         {
-            MenuFlyoutItem item = new()
-            {
-                // The leaf folder name identifies the repository; the full path is the tooltip.
-                Text = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-            };
-
-            ToolTipService.SetToolTip(item, path);
-
-            // Not an async lambda: exceptions escaping a void-returning delegate would crash the
-            // process, so the work goes through a method that handles its own failures.
-            item.Click += (_, _) => _ = OpenRecentAsync(path);
-            RecentFlyout.Items.Add(item);
+            ViewModel.CloseTab(tab);
         }
     }
 
@@ -175,7 +168,7 @@ public sealed partial class MainWindow : Window
 
         if (result.Succeeded)
         {
-            RefreshRecentFlyout();
+            await Home.RefreshAsync();
         }
         else
         {
@@ -194,7 +187,7 @@ public sealed partial class MainWindow : Window
 
         if (result.Succeeded)
         {
-            RefreshRecentFlyout();
+            await Home.RefreshAsync();
         }
         else
         {
@@ -280,7 +273,8 @@ public sealed partial class MainWindow : Window
     {
         args.Handled = true;
 
-        if (ViewModel.SelectedTab is not null)
+        // The palette acts on a repository, so it has nothing to offer while Home is selected.
+        if (ViewModel.SelectedRepository is not null)
         {
             await Repository.ShowPaletteAsync();
         }
@@ -353,7 +347,7 @@ public sealed partial class MainWindow : Window
         }
 
         await ViewModel.OpenRepositoryAsync(path);
-        RefreshRecentFlyout();
+        await Home.RefreshAsync();
     }
 
     /// <summary>

@@ -16,7 +16,7 @@ namespace GitExtensions.WinUI.ViewModels;
 ///  One open repository. Each tab owns its own state so tabs stay fully independent, mirroring how
 ///  the WinForms app gives every tab its own IGitUICommands/GitModule.
 /// </summary>
-public sealed class RepositoryTabViewModel : ObservableObject
+public sealed class RepositoryTabViewModel : ShellTab
 {
     /// <summary>
     ///  How many commits to read per page, and how many diff lines to render. Configurable in
@@ -79,7 +79,14 @@ public sealed class RepositoryTabViewModel : ObservableObject
 
     public string WorkingDir { get; }
 
-    public string Title { get; }
+    public override string Title { get; }
+
+    /// <summary>The working directory, which is what distinguishes two tabs with the same folder name.</summary>
+    public override string Description => WorkingDir;
+
+    public override bool IsClosable => true;
+
+    public override bool IsHome => false;
 
     /// <summary>The commits currently shown — <see cref="_allCommits"/> passed through the filter.</summary>
     public ObservableCollection<CommitRowViewModel> Commits { get; } = [];

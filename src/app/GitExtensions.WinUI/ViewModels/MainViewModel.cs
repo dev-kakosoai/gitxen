@@ -10,30 +10,61 @@ using Microsoft.UI.Xaml;
 namespace GitExtensions.WinUI.ViewModels;
 
 /// <summary>
-///  The shell: the set of open repository tabs and the current <see cref="UiMode"/>.
+///  The shell: the Home tab, the set of open repositories, and the current <see cref="UiMode"/>.
 /// </summary>
 public sealed class MainViewModel : ObservableObject
 {
     private readonly IGitExecutorProvider _executorProvider;
+    private readonly RepositoryCreator _creator;
     private UiMode _mode = UiMode.Simple;
     private UiMode _modeBeforeZen = UiMode.Simple;
-    private RepositoryTabViewModel? _selectedTab;
-
-    private readonly RepositoryCreator _creator;
+    private ShellTab? _selectedTab;
 
     public MainViewModel(ServiceContainer serviceContainer)
     {
         _executorProvider = serviceContainer.GetRequiredService<IGitExecutorProvider>();
         _creator = new RepositoryCreator(_executorProvider);
+
+        Tabs.Add(Home);
+        SelectedTab = Home;
     }
 
-    public ObservableCollection<RepositoryTabViewModel> Tabs { get; } = [];
+    /// <summary>Always first in the strip, and never removed.</summary>
+    public HomeTabViewModel Home { get; } = new();
 
-    public RepositoryTabViewModel? SelectedTab
+    public ObservableCollection<ShellTab> Tabs { get; } = [];
+
+    /// <summary>Recent repositories with their current branch, shown on the Home page.</summary>
+    public ObservableCollection<RecentRepository> RecentRepositories { get; } = [];
+
+    public ShellTab? SelectedTab
     {
         get => _selectedTab;
-        set => SetProperty(ref _selectedTab, value);
+        set
+        {
+            if (SetProperty(ref _selectedTab, value))
+            {
+                OnPropertyChanged(nameof(SelectedRepository));
+                OnPropertyChanged(nameof(HomeVisibility));
+                OnPropertyChanged(nameof(RepositoryVisibility));
+            }
+        }
     }
+
+    /// <summary>
+    ///  The selected tab when it is a repository, null when Home is selected. The repository view
+    ///  binds to this so it is simply empty on Home rather than needing to be told about it.
+    /// </summary>
+    public RepositoryTabViewModel? SelectedRepository => SelectedTab as RepositoryTabViewModel;
+
+    public Visibility HomeVisibility =>
+        SelectedRepository is null ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility RepositoryVisibility =>
+        SelectedRepository is null ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>Open repositories, excluding Home — what the session records and the counts report.</summary>
+    public IEnumerable<RepositoryTabViewModel> Repositories => Tabs.OfType<RepositoryTabViewModel>();
 
     public UiMode Mode
     {
@@ -45,7 +76,7 @@ public sealed class MainViewModel : ObservableObject
                 return;
             }
 
-            foreach (RepositoryTabViewModel tab in Tabs)
+            foreach (RepositoryTabViewModel tab in Repositories)
             {
                 tab.Mode = value;
             }
@@ -54,11 +85,10 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(IsZen));
             OnPropertyChanged(nameof(IsAdvancedSelected));
             OnPropertyChanged(nameof(AdvancedVisibility));
-            OnPropertyChanged(nameof(IsAddTabButtonVisible));
         }
     }
 
-    /// <summary>Zen hides the toolbar entirely — the commit list is all that's left.</summary>
+    /// <summary>Zen hides the shell chrome entirely — the commit list is all that's left.</summary>
     public Visibility ToolbarVisibility => Mode == UiMode.Zen ? Visibility.Collapsed : Visibility.Visible;
 
     public bool IsZen => Mode == UiMode.Zen;
@@ -66,22 +96,40 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Drives the Simple/Advanced toggle; Zen isn't represented there.</summary>
     public bool IsAdvancedSelected => Mode == UiMode.Advanced;
 
-    public Visibility EmptyStateVisibility => Tabs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-
-    /// <summary>
-    ///  The TabView is collapsed rather than merely empty when nothing is open: an empty TabView still
-    ///  draws its strip and content border, which would frame the empty state instead of getting out
-    ///  of its way.
-    /// </summary>
-    public Visibility TabsVisibility => Tabs.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-
-    /// <summary>Toolbar entries that only Advanced mode exposes (Fetch, Push, branch/stash menu).</summary>
+    /// <summary>Toolbar entries that only Advanced mode exposes.</summary>
     public Visibility AdvancedVisibility => Mode == UiMode.Advanced ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>Zen drops the new-tab affordance along with the rest of the chrome.</summary>
-    public bool IsAddTabButtonVisible => Mode != UiMode.Zen;
+    // ---- Repository list layout ------------------------------------------------------------------
+    // Tabs across the top or a column down the left. Which one suits depends on how many repositories
+    // are open and how long their names are, so it is a preference rather than a fixed choice.
 
-    /// <summary>Most-recently-opened repositories, newest first.</summary>
+    public RepositoryLayout Layout
+    {
+        get => AppOptions.Layout;
+        set
+        {
+            if (AppOptions.Layout == value)
+            {
+                return;
+            }
+
+            AppOptions.Layout = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsSidebarLayout));
+            OnPropertyChanged(nameof(TabStripVisibility));
+            OnPropertyChanged(nameof(SidebarVisibility));
+        }
+    }
+
+    public bool IsSidebarLayout => Layout == RepositoryLayout.Sidebar;
+
+    public Visibility TabStripVisibility =>
+        Layout == RepositoryLayout.Tabs && Mode != UiMode.Zen ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility SidebarVisibility =>
+        Layout == RepositoryLayout.Sidebar && Mode != UiMode.Zen ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Most-recently-opened repository paths, newest first.</summary>
     public ObservableCollection<string> Recent { get; } = [];
 
     public bool IsValidRepository(string path) => GitModule.IsValidGitWorkingDir(path);
@@ -92,8 +140,9 @@ public sealed class MainViewModel : ObservableObject
     /// </summary>
     public async Task OpenRepositoryAsync(string workingDir)
     {
-        RepositoryTabViewModel? existing = Tabs.FirstOrDefault(
+        RepositoryTabViewModel? existing = Repositories.FirstOrDefault(
             tab => string.Equals(tab.WorkingDir, workingDir, StringComparison.OrdinalIgnoreCase));
+
         if (existing is not null)
         {
             SelectedTab = existing;
@@ -104,8 +153,6 @@ public sealed class MainViewModel : ObservableObject
         Tabs.Add(tab);
         SelectedTab = tab;
         AddRecent(workingDir);
-        OnPropertyChanged(nameof(EmptyStateVisibility));
-        OnPropertyChanged(nameof(TabsVisibility));
 
         await tab.LoadAsync();
     }
@@ -140,6 +187,70 @@ public sealed class MainViewModel : ObservableObject
         return result;
     }
 
+    /// <summary>
+    ///  Rebuilds the Home page's recent list, then fills in each entry's branch and last commit in the
+    ///  background.
+    /// </summary>
+    /// <remarks>
+    ///  The reads are per repository and hit the disk, so they happen after the list is on screen. A
+    ///  repository that has been moved or deleted is marked rather than dropped — silently removing it
+    ///  would look like it had never been opened.
+    /// </remarks>
+    public async Task RefreshRecentAsync()
+    {
+        RecentRepositories.Clear();
+
+        foreach (string path in Recent)
+        {
+            RecentRepositories.Add(new RecentRepository(path));
+        }
+
+        foreach (RecentRepository entry in RecentRepositories)
+        {
+            if (!IsValidRepository(entry.Path))
+            {
+                entry.IsMissing = true;
+                continue;
+            }
+
+            try
+            {
+                RepositoryLoader loader = new(_executorProvider, entry.Path);
+
+                (string branch, string subject) = await Task.Run(
+                    () => (loader.GetCurrentBranch(), loader.GetLastCommitMessage()));
+
+                entry.Branch = branch;
+
+                // Only the first line: the recent list has one line to spend on it.
+                entry.LastCommit = subject.Split('\n', 2)[0].Trim();
+            }
+            catch (Exception)
+            {
+                // A repository that cannot be read is still worth listing; it just shows no detail.
+                entry.IsMissing = true;
+            }
+        }
+    }
+
+    /// <summary>Drops a repository from the recent list without touching anything on disk.</summary>
+    public void RemoveRecent(string path)
+    {
+        string? existing = Recent.FirstOrDefault(candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            Recent.Remove(existing);
+        }
+
+        RecentRepository? entry = RecentRepositories.FirstOrDefault(candidate => candidate.Path == path);
+
+        if (entry is not null)
+        {
+            RecentRepositories.Remove(entry);
+        }
+    }
+
     /// <summary>Moves a repository to the front of the recent list, capped at ten.</summary>
     private void AddRecent(string workingDir)
     {
@@ -157,12 +268,21 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public void CloseTab(RepositoryTabViewModel tab)
+    public void CloseTab(ShellTab tab)
     {
-        tab.Close();
-        Tabs.Remove(tab);
-        OnPropertyChanged(nameof(EmptyStateVisibility));
-        OnPropertyChanged(nameof(TabsVisibility));
+        if (tab is not RepositoryTabViewModel repository)
+        {
+            return;
+        }
+
+        repository.Close();
+        Tabs.Remove(repository);
+
+        // Fall back to Home rather than to nothing, so the shell always has something selected.
+        if (ReferenceEquals(SelectedTab, repository))
+        {
+            SelectedTab = Tabs.LastOrDefault() ?? Home;
+        }
     }
 
     /// <summary>
@@ -186,20 +306,24 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
-        if (state.SelectedIndex >= 0 && state.SelectedIndex < Tabs.Count)
-        {
-            SelectedTab = Tabs[state.SelectedIndex];
-        }
+        List<RepositoryTabViewModel> opened = [.. Repositories];
+
+        // The stored index counts repositories, not strip entries, and Home occupies the first slot.
+        SelectedTab = state.SelectedIndex >= 0 && state.SelectedIndex < opened.Count
+            ? opened[state.SelectedIndex]
+            : Home;
     }
 
     public SessionState CaptureSession(WindowBounds? window)
     {
+        List<RepositoryTabViewModel> opened = [.. Repositories];
+
         return new SessionState
         {
             // Zen is a transient view state, not something to be trapped in on next launch.
             Mode = Mode == UiMode.Zen ? _modeBeforeZen : Mode,
-            Repositories = Tabs.Select(tab => tab.WorkingDir).ToList(),
-            SelectedIndex = SelectedTab is null ? 0 : Tabs.IndexOf(SelectedTab),
+            Repositories = opened.Select(tab => tab.WorkingDir).ToList(),
+            SelectedIndex = SelectedRepository is null ? -1 : opened.IndexOf(SelectedRepository),
             Recent = Recent.ToList(),
             Window = window
         };
@@ -213,11 +337,13 @@ public sealed class MainViewModel : ObservableObject
         if (Mode == UiMode.Zen)
         {
             Mode = _modeBeforeZen;
+            RaiseChromeChanged();
             return;
         }
 
         _modeBeforeZen = Mode;
         Mode = UiMode.Zen;
+        RaiseChromeChanged();
     }
 
     public void ExitZen()
@@ -225,6 +351,14 @@ public sealed class MainViewModel : ObservableObject
         if (Mode == UiMode.Zen)
         {
             Mode = _modeBeforeZen;
+            RaiseChromeChanged();
         }
+    }
+
+    /// <summary>Zen hides the strip and the column, both of which depend on the mode as well as the layout.</summary>
+    private void RaiseChromeChanged()
+    {
+        OnPropertyChanged(nameof(TabStripVisibility));
+        OnPropertyChanged(nameof(SidebarVisibility));
     }
 }
