@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using GitExtensions.Extensibility.Git;
+using GitExtensions.WinUI.Diff;
 using GitExtensions.WinUI.Graph;
 using GitExtensions.WinUI.Services;
 using GitUIPluginInterfaces;
@@ -51,6 +52,7 @@ public sealed class RepositoryTabViewModel : ObservableObject
     private CommitRowViewModel? _selectedCommit;
     private ChangedFileViewModel? _selectedChangedFile;
     private string _diffTitle = "";
+    private bool _isSideBySide;
 
     public RepositoryTabViewModel(IGitExecutorProvider executorProvider, string workingDir, UiMode mode)
     {
@@ -71,6 +73,27 @@ public sealed class RepositoryTabViewModel : ObservableObject
     public ObservableCollection<ChangedFileViewModel> ChangedFiles { get; } = [];
 
     public ObservableCollection<DiffLineViewModel> DiffLines { get; } = [];
+
+    public ObservableCollection<SideBySideRow> SideBySideLines { get; } = [];
+
+    /// <summary>Unified or side-by-side; the diff panel shows one or the other.</summary>
+    public bool IsSideBySide
+    {
+        get => _isSideBySide;
+        set
+        {
+            if (SetProperty(ref _isSideBySide, value))
+            {
+                OnPropertyChanged(nameof(UnifiedVisibility));
+                OnPropertyChanged(nameof(SideBySideVisibility));
+                RebuildSideBySide();
+            }
+        }
+    }
+
+    public Visibility UnifiedVisibility => IsSideBySide ? Visibility.Collapsed : Visibility.Visible;
+
+    public Visibility SideBySideVisibility => IsSideBySide ? Visibility.Visible : Visibility.Collapsed;
 
     public ObservableCollection<string> Branches { get; } = [];
 
@@ -287,6 +310,20 @@ public sealed class RepositoryTabViewModel : ObservableObject
 
     public Task<GitOperationResult> StashListAsync() =>
         RunOperationAsync(loader => loader.StashList());
+
+    /// <summary>Raw <c>git blame</c> output for the selected file at the selected commit.</summary>
+    public Task<string> GetBlameAsync(string fileName)
+    {
+        ObjectId? revision = SelectedCommit?.Revision?.ObjectId;
+        return Task.Run(() => _loader.GetBlame(fileName, revision));
+    }
+
+    /// <summary>The commits that touched one file, as display rows.</summary>
+    public Task<IReadOnlyList<CommitRowViewModel>> GetFileHistoryAsync(string fileName) =>
+        Task.Run<IReadOnlyList<CommitRowViewModel>>(
+            () => _loader.GetFileHistory(fileName, maxCount: 200, CancellationToken.None)
+                .Select(revision => new CommitRowViewModel(revision))
+                .ToList());
 
     /// <summary>Names of the files that a commit would include, for confirmation before committing.</summary>
     public Task<IReadOnlyList<string>> GetPendingChangesAsync() =>
@@ -535,6 +572,9 @@ public sealed class RepositoryTabViewModel : ObservableObject
             {
                 ChangedFiles.Add(new ChangedFileViewModel(file, isWorkingDirectory));
             }
+
+            // Show something straight away rather than an empty diff pane awaiting a click.
+            SelectedChangedFile = ChangedFiles.FirstOrDefault();
         }
         catch (OperationCanceledException)
         {
@@ -583,29 +623,31 @@ public sealed class RepositoryTabViewModel : ObservableObject
 
             if (string.IsNullOrEmpty(diff))
             {
-                DiffLines.Add(DiffLineViewModel.Create("(no textual diff — binary file, or no changes)"));
+                DiffLines.Add(DiffLineViewModel.CreatePlain("(no textual diff — binary file, or no changes)"));
                 return;
             }
 
-            string[] lines = diff.Split('\n');
-            int count = Math.Min(lines.Length, MaxDiffLines);
-            for (int i = 0; i < count; i++)
+            IReadOnlyList<DiffLineViewModel> parsed = DiffParser.ParseUnified(diff, file.Name, MaxDiffLines, out int omitted);
+
+            foreach (DiffLineViewModel line in parsed)
             {
-                DiffLines.Add(DiffLineViewModel.Create(lines[i].TrimEnd('\r')));
+                DiffLines.Add(line);
             }
 
-            if (lines.Length > MaxDiffLines)
+            if (omitted > 0)
             {
-                DiffLines.Add(DiffLineViewModel.Create(
-                    $"… {(lines.Length - MaxDiffLines).ToString("N0", CultureInfo.InvariantCulture)} more lines not shown"));
+                DiffLines.Add(DiffLineViewModel.CreatePlain(
+                    $"… {omitted.ToString("N0", CultureInfo.InvariantCulture)} more lines not shown"));
             }
+
+            RebuildSideBySide();
         }
         catch (OperationCanceledException)
         {
         }
         catch (Exception ex)
         {
-            DiffLines.Add(DiffLineViewModel.Create(ex.Message));
+            DiffLines.Add(DiffLineViewModel.CreatePlain(ex.Message));
         }
         finally
         {
@@ -613,6 +655,21 @@ public sealed class RepositoryTabViewModel : ObservableObject
             {
                 _diffCts = null;
             }
+        }
+    }
+
+    private void RebuildSideBySide()
+    {
+        SideBySideLines.Clear();
+
+        if (!IsSideBySide)
+        {
+            return;
+        }
+
+        foreach (SideBySideRow row in DiffParser.ToSideBySide([.. DiffLines]))
+        {
+            SideBySideLines.Add(row);
         }
     }
 

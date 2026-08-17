@@ -148,6 +148,33 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void Blame_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedTab is not RepositoryTabViewModel { SelectedChangedFile: ChangedFileViewModel file } tab)
+        {
+            return;
+        }
+
+        string blame = await tab.GetBlameAsync(file.Name);
+        await ShowMessageAsync($"Blame — {file.Name}", string.IsNullOrWhiteSpace(blame) ? "No blame output." : blame);
+    }
+
+    private async void FileHistory_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedTab is not RepositoryTabViewModel { SelectedChangedFile: ChangedFileViewModel file } tab)
+        {
+            return;
+        }
+
+        IReadOnlyList<CommitRowViewModel> history = await tab.GetFileHistoryAsync(file.Name);
+
+        string text = history.Count == 0
+            ? "No history found for this file."
+            : string.Join(Environment.NewLine, history.Select(c => $"{c.ShortHash}  {c.Date,-18}  {c.Author,-22}  {c.Subject}"));
+
+        await ShowMessageAsync($"History — {file.Name}", text);
+    }
+
     private async void CreateBranch_Click(object sender, RoutedEventArgs e)
     {
         if (await PromptAsync("Create branch", "New branch name", "Create") is not string name || ViewModel.SelectedTab is not RepositoryTabViewModel tab)

@@ -95,6 +95,42 @@ internal sealed class RepositoryLoader
         return patch?.Text ?? errorMessage ?? "";
     }
 
+    /// <summary>
+    ///  <c>git blame</c> for a file, as of a revision. Returned as raw text: git's default output is
+    ///  already aligned and readable, and parsing the porcelain format would buy nothing here.
+    /// </summary>
+    public string GetBlame(string fileName, ObjectId? revision)
+    {
+        GitArgumentBuilder arguments = new("blame")
+        {
+            "--date=short",
+            { revision is not null, revision?.ToString() ?? "" },
+            "--",
+            fileName.Quote()
+        };
+
+        ExecutionResult result = _module.GitExecutable.Execute(arguments, throwOnErrorExit: false);
+        return result.ExitedSuccessfully ? result.StandardOutput : result.AllOutput;
+    }
+
+    /// <summary>The commits that touched one file, newest first.</summary>
+    public IReadOnlyList<GitRevision> GetFileHistory(string fileName, int maxCount, CancellationToken cancellationToken)
+    {
+        FileHistoryObserver observer = new(maxCount);
+
+        // pathFilter is what RevisionReader already uses for per-file history, so this reuses the
+        // same streaming path as the main log.
+        new RevisionReader(_module).GetLog(
+            observer,
+            revisionFilter: "HEAD",
+            pathFilter: fileName.ToPosixPath().Quote(),
+            hasNotes: false,
+            autostashLabel: "",
+            cancellationToken: cancellationToken);
+
+        return observer.Revisions;
+    }
+
     public IReadOnlyList<string> GetLocalBranches() =>
         _module.GetRefs(RefsFilter.Heads).Select(reference => reference.LocalName).Order(StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -263,6 +299,40 @@ internal sealed class RepositoryLoader
         // fetch, rejected push, dirty worktree), not an exceptional condition.
         ExecutionResult result = _module.GitExecutable.Execute(arguments, throwOnErrorExit: false);
         return new GitOperationResult(description, result.ExitedSuccessfully, result.AllOutput.Trim());
+    }
+
+    /// <summary>Collects revisions up to a cap; file history is a dialog, not an endless list.</summary>
+    private sealed class FileHistoryObserver : IObserver<IReadOnlyList<GitRevision>>
+    {
+        private readonly int _maxCount;
+
+        public FileHistoryObserver(int maxCount)
+        {
+            _maxCount = maxCount;
+        }
+
+        public List<GitRevision> Revisions { get; } = [];
+
+        public void OnCompleted()
+        {
+        }
+
+        public void OnError(Exception error)
+        {
+        }
+
+        public void OnNext(IReadOnlyList<GitRevision> value)
+        {
+            foreach (GitRevision revision in value)
+            {
+                if (Revisions.Count >= _maxCount)
+                {
+                    return;
+                }
+
+                Revisions.Add(revision);
+            }
+        }
     }
 }
 
