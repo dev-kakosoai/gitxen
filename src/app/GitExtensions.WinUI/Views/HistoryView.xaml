@@ -119,6 +119,9 @@
                                             <MenuFlyoutItem Text="Reset" Click="BisectReset_Click" />
                                         </MenuFlyoutSubItem>
                                         <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Open this commit in the browser"
+                                                        Click="OpenCommitOnHost_Click" />
+                                        <MenuFlyoutSeparator />
                                         <MenuFlyoutItem Text="Copy full hash" Click="CopyHash_Click">
                                             <MenuFlyoutItem.Icon>
                                                 <FontIcon Glyph="&#xE8C8;" />

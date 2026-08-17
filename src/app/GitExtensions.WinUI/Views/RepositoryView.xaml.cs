@@ -1,4 +1,5 @@
 using GitExtensions.WinUI.Models;
+using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -48,6 +49,7 @@ public sealed partial class RepositoryView : UserControl
         ["stashes"] = StashesPage,
         ["submodules"] = SubmodulesPage,
         ["worktrees"] = WorktreesPage,
+        ["gitconfig"] = GitConfigPage,
         ["maintenance"] = MaintenancePage,
         ["settings"] = SettingsPage
     };
@@ -101,6 +103,63 @@ public sealed partial class RepositoryView : UserControl
         RefreshBranchMenu();
     }
 
+    // ---- Hosting service ------------------------------------------------------------------------
+    // Everything here opens a browser rather than calling an API. Creating a pull request or reading
+    // issues through the API would mean holding a credential, and this front-end has nowhere safe to
+    // keep one — the session file is plain JSON. The browser is already signed in.
+
+    private async void HostRepository_Click(object sender, RoutedEventArgs e) =>
+        await OpenHostAsync(host => host.BrowseUrl);
+
+    private async void HostBranch_Click(object sender, RoutedEventArgs e) =>
+        await OpenHostAsync(host => host.BranchUrl(Tab?.Branch ?? ""));
+
+    private async void HostPullRequests_Click(object sender, RoutedEventArgs e) =>
+        await OpenHostAsync(host => host.PullRequestsUrl);
+
+    private async void HostIssues_Click(object sender, RoutedEventArgs e) =>
+        await OpenHostAsync(host => host.IssuesUrl);
+
+    /// <summary>
+    ///  Opens the host's "open a pull request" page for the current branch.
+    /// </summary>
+    /// <remarks>
+    ///  Warns when the branch has no upstream: the compare page will not find it, and the fix — push
+    ///  with "track this branch" — is not obvious from the resulting error on the website.
+    /// </remarks>
+    private async void HostCreatePullRequest_Click(object sender, RoutedEventArgs e) =>
+        await CreatePullRequestAsync();
+
+    private async Task CreatePullRequestAsync()
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        if (tab.Upstream.Length == 0)
+        {
+            tab.ReportInformation(
+                "Branch is not on the remote yet",
+                $"'{tab.Branch}' has no upstream, so there is nothing to open a pull request from. "
+                    + "Push it first with \"Track this branch on the remote\" ticked.");
+
+            return;
+        }
+
+        await OpenHostAsync(host => host.CreatePullRequestUrl(tab.Branch));
+    }
+
+    private async Task OpenHostAsync(Func<HostedRepository, string> buildUrl)
+    {
+        if (Tab?.Host is not HostedRepository host)
+        {
+            return;
+        }
+
+        await Windows.System.Launcher.LaunchUriAsync(new Uri(buildUrl(host)));
+    }
+
     private void Palette_Click(object sender, RoutedEventArgs e) => _ = ShowPaletteAsync();
 
     /// <summary>
@@ -152,6 +211,17 @@ public sealed partial class RepositoryView : UserControl
             tab.StopComparing();
             return Task.CompletedTask;
         }));
+
+        if (tab.Host is HostedRepository host)
+        {
+            commands.Add(new PaletteCommand($"Open {host.Owner}/{host.Name} in browser", "Host", host.Host,
+                () => OpenHostAsync(_ => host.BrowseUrl)));
+            commands.Add(new PaletteCommand("Create pull request", "Host", "opens the compare page",
+                CreatePullRequestAsync));
+            commands.Add(new PaletteCommand("Open pull requests", "Host", "",
+                () => OpenHostAsync(_ => host.PullRequestsUrl)));
+            commands.Add(new PaletteCommand("Open issues", "Host", "", () => OpenHostAsync(_ => host.IssuesUrl)));
+        }
 
         foreach (string branch in tab.Branches.Where(branch => branch != tab.Branch))
         {

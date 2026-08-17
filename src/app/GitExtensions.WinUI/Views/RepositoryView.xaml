@@ -106,6 +106,12 @@
         </NavigationView.MenuItems>
 
         <NavigationView.FooterMenuItems>
+            <NavigationViewItem Tag="gitconfig" Content="Git config">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE9F5;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+
             <NavigationViewItem Tag="maintenance" Content="Maintenance">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE90F;" />
@@ -216,6 +222,27 @@
                         </DropDownButton.Flyout>
                     </DropDownButton>
 
+                    <!-- Only present when a remote resolves to something browsable, so a local-only
+                         repository is not offered links that go nowhere. -->
+                    <DropDownButton ToolTipService.ToolTip="Open this repository on its host"
+                                    Visibility="{x:Bind Tab.HostVisibility, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE774;" FontSize="12" />
+                            <TextBlock Text="{x:Bind Tab.HostName, Mode=OneWay}" />
+                        </StackPanel>
+                        <DropDownButton.Flyout>
+                            <MenuFlyout Placement="Bottom">
+                                <MenuFlyoutItem Text="Open repository" Click="HostRepository_Click" />
+                                <MenuFlyoutItem Text="Open this branch" Click="HostBranch_Click" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="Create pull request from this branch"
+                                                Click="HostCreatePullRequest_Click" />
+                                <MenuFlyoutItem Text="Pull requests" Click="HostPullRequests_Click" />
+                                <MenuFlyoutItem Text="Issues" Click="HostIssues_Click" />
+                            </MenuFlyout>
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+
                     <Button Click="Palette_Click" ToolTipService.ToolTip="Command palette (Ctrl+Shift+P)">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE721;" FontSize="12" />
@@ -252,6 +279,7 @@
                 <views:StashesView x:Name="StashesPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
                 <views:SubmodulesView x:Name="SubmodulesPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
                 <views:WorktreesView x:Name="WorktreesPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
+                <views:GitConfigView x:Name="GitConfigPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
                 <views:MaintenanceView x:Name="MaintenancePage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
                 <views:SettingsView x:Name="SettingsPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
             </Grid>

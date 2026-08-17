@@ -1,5 +1,6 @@
 using GitExtensions.Extensibility.Git;
 using GitExtensions.WinUI.Models;
+using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -266,6 +267,31 @@ public sealed partial class HistoryView : RepositoryPage
 
     private async void BisectReset_Click(object sender, RoutedEventArgs e) =>
         await ReportAsync(tab => tab.BisectAsync("reset"));
+
+    /// <summary>Opens the selected commit on the hosting service, where the review lives.</summary>
+    private async void OpenCommitOnHost_Click(object sender, RoutedEventArgs e)
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        if (tab.Host is not HostedRepository host)
+        {
+            tab.ReportInformation(
+                "No hosting service",
+                "This repository has no remote that resolves to a browsable address.");
+
+            return;
+        }
+
+        if (tab.SelectedCommit is not CommitRowViewModel { IsWorkingDirectory: false } commit)
+        {
+            return;
+        }
+
+        await Windows.System.Launcher.LaunchUriAsync(new Uri(host.CommitUrl(commit.FullHash)));
+    }
 
     private void CopyHash_Click(object sender, RoutedEventArgs e) =>
         CopyToClipboard(Tab?.SelectedCommit?.FullHash, "Full hash copied.");

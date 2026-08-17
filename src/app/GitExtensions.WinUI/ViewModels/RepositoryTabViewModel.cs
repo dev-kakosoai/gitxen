@@ -63,6 +63,7 @@ public sealed class RepositoryTabViewModel : ShellTab
     private bool _isBusy;
     private string? _selectedBranch;
     private bool _suppressBranchCheckout;
+    private HostedRepository? _host;
     private CommitRowViewModel? _selectedCommit;
     private CommitRowViewModel? _compareTarget;
     private ChangedFileViewModel? _selectedChangedFile;
@@ -119,6 +120,35 @@ public sealed class RepositoryTabViewModel : ShellTab
     public ObservableCollection<RemoteBranchInfo> RemoteBranches { get; } = [];
 
     public ObservableCollection<ReflogEntry> Reflog { get; } = [];
+
+    public ObservableCollection<GitConfigEntry> LocalConfig { get; } = [];
+
+    public ObservableCollection<GitConfigEntry> GlobalConfig { get; } = [];
+
+    /// <summary>
+    ///  Where this repository lives online, from its remote URL, or null when it has no remote or the
+    ///  remote is not a recognisable hosting service.
+    /// </summary>
+    public HostedRepository? Host
+    {
+        get => _host;
+        private set
+        {
+            if (SetProperty(ref _host, value))
+            {
+                OnPropertyChanged(nameof(HasHost));
+                OnPropertyChanged(nameof(HostVisibility));
+                OnPropertyChanged(nameof(HostName));
+            }
+        }
+    }
+
+    public bool HasHost => Host is not null;
+
+    /// <summary>The hosting actions are hidden entirely rather than shown disabled when there is no remote.</summary>
+    public Visibility HostVisibility => HasHost ? Visibility.Visible : Visibility.Collapsed;
+
+    public string HostName => Host is null ? "" : $"{Host.Owner}/{Host.Name}";
 
     /// <summary>Local branch names, for the pickers that just need a name.</summary>
     public ObservableCollection<string> Branches { get; } = [];
@@ -511,6 +541,22 @@ public sealed class RepositoryTabViewModel : ShellTab
 
     public Task LoadRemoteBranchesAsync() => ReplaceAsync(RemoteBranches, _loader.GetRemoteBranches);
 
+    public Task LoadLocalConfigAsync() =>
+        ReplaceAsync(LocalConfig, () => _loader.GetConfiguration(GitConfigScope.Local));
+
+    public Task LoadGlobalConfigAsync() =>
+        ReplaceAsync(GlobalConfig, () => _loader.GetConfiguration(GitConfigScope.Global));
+
+    public Task<string> GetConfigValueAsync(GitConfigScope scope, string key) =>
+        Task.Run(() => _loader.GetConfigValue(scope, key));
+
+    /// <summary>
+    ///  Writes a setting. Unlike the git operations, this does not reload the commit list — nothing
+    ///  about history changes when a name or a line-ending rule does.
+    /// </summary>
+    public Task<GitOperationResult> SetConfigValueAsync(GitConfigScope scope, string key, string value) =>
+        Task.Run(() => _loader.SetConfigValue(scope, key, value));
+
     /// <summary>Capped: the reflog is a recovery aid, not a history to page through.</summary>
     public Task LoadReflogAsync() => ReplaceAsync(Reflog, () => _loader.GetReflog(maxCount: 200));
 
@@ -750,6 +796,7 @@ public sealed class RepositoryTabViewModel : ShellTab
             {
                 Branch = await Task.Run(_loader.GetCurrentBranch, cts.Token);
                 _refsByCommit = await Task.Run(_loader.GetRefsByCommit, cts.Token);
+                await ResolveHostAsync(cts.Token);
                 await RefreshBranchesAsync(cts.Token);
                 await AddWorkingDirectoryRowAsync(cts.Token);
             }
@@ -971,6 +1018,19 @@ public sealed class RepositoryTabViewModel : ShellTab
         _suppressBranchCheckout = true;
         SelectedBranch = Branches.Contains(Branch) ? Branch : null;
         _suppressBranchCheckout = false;
+    }
+
+    /// <summary>
+    ///  Works out where this repository lives online, preferring "origin" and otherwise taking the
+    ///  first remote that parses into something browsable.
+    /// </summary>
+    private async Task ResolveHostAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<RemoteInfo> remotes = await Task.Run(_loader.GetRemotes, cancellationToken);
+
+        RemoteInfo? preferred = remotes.FirstOrDefault(remote => remote.Name == "origin") ?? remotes.FirstOrDefault();
+
+        Host = preferred is null ? null : GitHostLinks.Parse(preferred.FetchUrl);
     }
 
     private async Task LoadChangedFilesAsync(CommitRowViewModel? commit)
