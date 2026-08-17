@@ -1,8 +1,10 @@
+using System.Globalization;
 using System.Text;
 using GitCommands;
 using GitCommands.Git;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
+using GitExtensions.WinUI.Models;
 using GitExtUtils;
 using GitUIPluginInterfaces;
 
@@ -18,7 +20,7 @@ namespace GitExtensions.WinUI.Services;
 ///   callers must not run two of these operations against the same instance concurrently.
 ///  </para>
 /// </remarks>
-internal sealed class RepositoryLoader
+internal sealed partial class RepositoryLoader
 {
     private readonly GitModule _module;
 
@@ -32,16 +34,40 @@ internal sealed class RepositoryLoader
     ///  them. Blocks the calling thread for the duration — call it from a background thread.
     /// </summary>
     /// <param name="skip">How many of the most recent commits to skip, for paging.</param>
-    public void StreamRevisions(IObserver<IReadOnlyList<GitRevision>> observer, int skip, CancellationToken cancellationToken)
+    public void StreamRevisions(IObserver<IReadOnlyList<GitRevision>> observer, int skip, RevisionQuery query, CancellationToken cancellationToken)
     {
-        // revisionFilter is spliced straight into the `git log` argument list, so --skip belongs here.
-        string revisionFilter = skip > 0 ? $"HEAD --skip={skip}" : "HEAD";
+        // revisionFilter is spliced straight into the `git log` argument list, so the scope, the
+        // search terms and --skip all belong here rather than being applied afterwards.
+        StringBuilder revisionFilter = new(query.Scope == RevisionScope.AllBranches ? "--all" : "HEAD");
+
+        if (skip > 0)
+        {
+            revisionFilter.Append(CultureInfo.InvariantCulture, $" --skip={skip}");
+        }
+
+        // -S is a content search: it matches commits that changed the number of occurrences of the
+        // text, which is what "find where this was introduced" actually means. --author and the path
+        // filter are ordinary log filters.
+        if (!string.IsNullOrWhiteSpace(query.ContainingText))
+        {
+            revisionFilter.Append(CultureInfo.InvariantCulture, $" -S{query.ContainingText.Quote()} --pickaxe-regex");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Author))
+        {
+            revisionFilter.Append(CultureInfo.InvariantCulture, $" --author={query.Author.Quote()}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.MessageContains))
+        {
+            revisionFilter.Append(CultureInfo.InvariantCulture, $" --grep={query.MessageContains.Quote()} --regexp-ignore-case");
+        }
 
         // allBodies: the Advanced-mode details pane shows the full commit message, not just the subject.
         new RevisionReader(_module, allBodies: true).GetLog(
             observer,
-            revisionFilter,
-            pathFilter: "",
+            revisionFilter.ToString(),
+            pathFilter: string.IsNullOrWhiteSpace(query.Path) ? "" : query.Path.ToPosixPath().Quote(),
             hasNotes: false,
             autostashLabel: "",
             cancellationToken: cancellationToken);
@@ -159,6 +185,87 @@ internal sealed class RepositoryLoader
     public GitOperationResult UnstageFile(string fileName) =>
         Run($"Unstage {fileName}", Commands.Reset(ResetMode.ResetIndex, "HEAD", fileName));
 
+    /// <summary>Stages everything, including untracked files, which is what the Changes page offers.</summary>
+    public GitOperationResult StageAll()
+    {
+        IReadOnlyList<GitItemStatus> changes = _module.GetAllChangedFiles();
+        IReadOnlyList<GitItemStatus> unstaged = [.. changes.Where(file => file.Staged != StagedStatus.Index)];
+
+        if (unstaged.Count == 0)
+        {
+            return new GitOperationResult("Stage all", true, "Nothing to stage.");
+        }
+
+        return _module.StageFiles(unstaged, out string output)
+            ? new GitOperationResult("Stage all", true, $"Staged {unstaged.Count} file(s).")
+            : new GitOperationResult("Stage all", false, output);
+    }
+
+    public GitOperationResult UnstageAll() =>
+        Run("Unstage all", Commands.Reset(ResetMode.ResetIndex, "HEAD"));
+
+    /// <summary>
+    ///  Applies a patch to the index, forwards to stage it or reversed to unstage it.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   This is how partial staging works: git has no command that stages part of a file, so a patch
+    ///   containing just the wanted hunk is applied to the index with <c>--cached</c>. The working
+    ///   tree is untouched either way — only what is staged changes.
+    ///  </para>
+    ///  <para>
+    ///   The patch goes through a temp file rather than stdin so that its exact bytes, including the
+    ///   trailing newline git insists on, reach the command unmodified.
+    ///  </para>
+    /// </remarks>
+    public GitOperationResult ApplyToIndex(string patch, bool reverse, string description)
+    {
+        string patchFile = Path.Combine(Path.GetTempPath(), $"gitextensions-winui-hunk-{Guid.NewGuid():N}.patch");
+
+        try
+        {
+            // Written as UTF-8 without a BOM: git treats a BOM as file content and the patch stops
+            // matching.
+            File.WriteAllText(patchFile, patch, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+            return Run(description, new GitArgumentBuilder("apply")
+            {
+                "--cached",
+                { reverse, "--reverse" },
+
+                // Hunks taken out of a larger diff carry the surrounding context but not always the
+                // whitespace git would prefer; without this a stage can fail on an unrelated line.
+                "--whitespace=nowarn",
+                "--",
+                patchFile.Quote()
+            });
+        }
+        catch (IOException ex)
+        {
+            return new GitOperationResult(description, false, ex.Message);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(patchFile);
+            }
+            catch (IOException)
+            {
+                // A leftover temp patch is not worth failing the operation over.
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Throws away a file's uncommitted changes. An untracked file has nothing to restore it from, so
+    ///  discarding it means deleting it — a different command, and the caller must have confirmed.
+    /// </summary>
+    public GitOperationResult DiscardFile(string fileName, bool isUntracked) =>
+        isUntracked
+            ? Run($"Delete {fileName}", new GitArgumentBuilder("clean") { "-f", "--", fileName.Quote() })
+            : Run($"Discard {fileName}", new GitArgumentBuilder("checkout") { "--", fileName.Quote() });
+
     public GitOperationResult CreateBranch(string branchName, ObjectId objectId, bool checkout) =>
         Run($"Create branch {branchName}", Commands.Branch(branchName, objectId, checkout));
 
@@ -198,6 +305,58 @@ internal sealed class RepositoryLoader
     public GitOperationResult StashPop() =>
         Run("Stash pop", new GitArgumentBuilder("stash") { "pop" });
 
+    /// <summary>
+    ///  Stash entries are addressed by reflog selector (<c>stash@{1}</c>), which is why the pages pass
+    ///  a reference through rather than an index — the selector is what git accepts.
+    /// </summary>
+    public GitOperationResult StashApply(string reference) =>
+        Run($"Apply {reference}", new GitArgumentBuilder("stash") { "apply", reference.Quote() });
+
+    public GitOperationResult StashPop(string reference) =>
+        Run($"Pop {reference}", new GitArgumentBuilder("stash") { "pop", reference.Quote() });
+
+    public GitOperationResult StashDrop(string reference) =>
+        Run($"Drop {reference}", new GitArgumentBuilder("stash") { "drop", reference.Quote() });
+
+    public GitOperationResult RenameBranch(string oldName, string newName) =>
+        Run($"Rename {oldName}", new GitArgumentBuilder("branch") { "-m", oldName.Quote(), newName.Quote() });
+
+    /// <summary>Points a local branch at an upstream, for a branch created before its remote existed.</summary>
+    public GitOperationResult SetUpstream(string branch, string upstream) =>
+        Run($"Track {upstream}", new GitArgumentBuilder("branch")
+        {
+            $"--set-upstream-to={upstream}",
+            branch.Quote()
+        });
+
+    /// <summary>Fetches one named remote, rather than whichever one the current branch tracks.</summary>
+    public GitOperationResult FetchRemote(string remote, bool prune) =>
+        Run($"Fetch {remote}", new GitArgumentBuilder("fetch")
+        {
+            { prune, "--prune" },
+            "--tags",
+            remote.Quote()
+        });
+
+    /// <summary>Updates one submodule, for when re-initialising every one of them is overkill.</summary>
+    public GitOperationResult UpdateSubmodule(string path) =>
+        Run($"Update {path}", new GitArgumentBuilder("submodule")
+        {
+            "update",
+            "--init",
+            "--recursive",
+            "--",
+            path.Quote()
+        });
+
+    /// <summary>Drops worktree administrative entries whose directories are gone.</summary>
+    public GitOperationResult PruneWorktrees() =>
+        Run("Prune worktrees", new GitArgumentBuilder("worktree") { "prune" });
+
+    /// <summary>Checks out a tag or commit, which necessarily leaves HEAD detached.</summary>
+    public GitOperationResult CheckoutDetached(string reference) =>
+        Run($"Checkout {reference}", new GitArgumentBuilder("checkout") { "--detach", reference.Quote() });
+
     // ---- History operations -------------------------------------------------------------------
     // These are all built with GitArgumentBuilder rather than the Commands factories: the factories
     // take option structs and enums this front-end doesn't model, and the raw arguments are plain
@@ -214,6 +373,22 @@ internal sealed class RepositoryLoader
 
     public GitOperationResult ResetTo(ObjectId commit, ResetMode mode) =>
         Run($"Reset ({mode}) to {commit.ToShortString()}", Commands.Reset(mode, commit.ToString()));
+
+    /// <summary>
+    ///  Reset to anything git can resolve, including a reflog selector such as <c>HEAD@{2}</c>, which
+    ///  is not an <see cref="ObjectId"/> and so cannot go through the overload above.
+    /// </summary>
+    public GitOperationResult ResetTo(string reference, ResetMode mode) =>
+        Run($"Reset ({mode}) to {reference}", Commands.Reset(mode, reference));
+
+    /// <summary>Creates a branch at any resolvable reference, again for reflog selectors.</summary>
+    public GitOperationResult CreateBranchAt(string branchName, string reference, bool checkout) =>
+        Run($"Create branch {branchName}", new GitArgumentBuilder(checkout ? "checkout" : "branch")
+        {
+            { checkout, "-b" },
+            branchName.Quote(),
+            reference.Quote()
+        });
 
     /// <summary>
     ///  Continue/abort/skip for whichever operation is in progress. The command differs per
@@ -300,8 +475,124 @@ internal sealed class RepositoryLoader
     public GitOperationResult Pull() =>
         Run("Pull", _module.PullCmd(GetRemote(), remoteBranch: null, rebase: false));
 
+    /// <summary>
+    ///  Pull with the choices the plain one does not offer: rebase instead of merge, and pruning
+    ///  remote-tracking branches that no longer exist.
+    /// </summary>
+    public GitOperationResult Pull(PullOptions options)
+    {
+        string remote = string.IsNullOrWhiteSpace(options.Remote) ? GetRemote() : options.Remote;
+
+        return Run($"Pull {remote}", new GitArgumentBuilder("pull")
+        {
+            { options.Rebase, "--rebase" },
+            { options.Prune, "--prune" },
+            { options.FastForwardOnly && !options.Rebase, "--ff-only" },
+            remote.Quote(),
+            { !string.IsNullOrWhiteSpace(options.RemoteBranch), options.RemoteBranch.Quote() }
+        });
+    }
+
     public GitOperationResult Push(string branch) =>
         Run("Push", Commands.Push(GetRemote(), branch, toBranch: branch, ForcePushOptions.DoNotForce, track: false, recursiveSubmodules: 0));
+
+    /// <summary>
+    ///  Push with the options that make it usable on a real branch: force-with-lease, tags, and
+    ///  setting the upstream for a branch that has never been pushed.
+    /// </summary>
+    /// <remarks>
+    ///  Force is always <c>--force-with-lease</c>, never a bare <c>--force</c>: the lease refuses the
+    ///  push if the remote moved since it was last fetched, which is the difference between rewriting
+    ///  your own history and discarding someone else's.
+    /// </remarks>
+    public GitOperationResult Push(PushOptions options)
+    {
+        string remote = string.IsNullOrWhiteSpace(options.Remote) ? GetRemote() : options.Remote;
+        string target = string.IsNullOrWhiteSpace(options.RemoteBranch)
+            ? options.Branch
+            : $"{options.Branch}:{options.RemoteBranch}";
+
+        return Run($"Push to {remote}", new GitArgumentBuilder("push")
+        {
+            { options.ForceWithLease, "--force-with-lease" },
+            { options.SetUpstream, "--set-upstream" },
+            { options.PushAllTags, "--tags" },
+            remote.Quote(),
+            { !options.PushAllTags || !string.IsNullOrWhiteSpace(options.Branch), target.Quote() }
+        });
+    }
+
+    /// <summary>Merge with the strategy choices: keep the merge commit, or fold the work in flat.</summary>
+    public GitOperationResult MergeBranch(string branchName, MergeOptions options) =>
+        Run($"Merge {branchName}", new GitArgumentBuilder("merge")
+        {
+            { options.NoFastForward && !options.Squash, "--no-ff" },
+            { options.Squash, "--squash" },
+            { options.NoCommit && !options.Squash, "--no-commit" },
+            { !string.IsNullOrWhiteSpace(options.Message), $"-m {options.Message.Quote()}" },
+            branchName.Quote()
+        });
+
+    /// <summary>
+    ///  Deletes a branch on the remote by pushing an empty ref to it. Nothing local changes.
+    /// </summary>
+    public GitOperationResult DeleteRemoteBranch(string remote, string branch) =>
+        Run($"Delete {remote}/{branch}", new GitArgumentBuilder("push")
+        {
+            remote.Quote(),
+            "--delete",
+            branch.Quote()
+        });
+
+    /// <summary>
+    ///  Checks a branch out, deciding what to do with uncommitted changes rather than always refusing.
+    /// </summary>
+    public GitOperationResult Checkout(string branch, LocalChangesAction localChanges) =>
+        Run($"Checkout {branch}", Commands.Checkout(branch, localChanges));
+
+    /// <summary>Stash with the options that decide what actually gets set aside.</summary>
+    public GitOperationResult StashSave(string message, bool includeUntracked, bool keepIndex) =>
+        Run("Stash", new GitArgumentBuilder("stash")
+        {
+            "push",
+            { includeUntracked, "--include-untracked" },
+            { keepIndex, "--keep-index" },
+            { !string.IsNullOrWhiteSpace(message), $"-m {message.Quote()}" }
+        });
+
+    /// <summary>The diff a stash entry would apply, for reading before deciding to apply it.</summary>
+    public string GetStashDiff(string reference)
+    {
+        ExecutionResult result = _module.GitExecutable.Execute(
+            new GitArgumentBuilder("stash") { "show", "--patch", reference.Quote() },
+            throwOnErrorExit: false);
+
+        return result.ExitedSuccessfully ? result.StandardOutput : result.AllOutput;
+    }
+
+    /// <summary>
+    ///  Removes untracked files. Directories and ignored files are opt-in because <c>git clean</c>
+    ///  deletes without a reflog to recover from.
+    /// </summary>
+    public GitOperationResult Clean(bool includeDirectories, bool includeIgnored, bool dryRun) =>
+        Run(dryRun ? "Clean (preview)" : "Clean", new GitArgumentBuilder("clean")
+        {
+            dryRun ? "--dry-run" : "--force",
+            { includeDirectories, "-d" },
+            { includeIgnored, "-x" }
+        });
+
+    /// <summary>Repacks and prunes; the housekeeping <c>FormCleanupRepository</c> offers.</summary>
+    public GitOperationResult CollectGarbage() =>
+        Run("Garbage collect", new GitArgumentBuilder("gc") { "--auto" });
+
+    /// <summary>Writes the working tree of a revision to an archive.</summary>
+    public GitOperationResult Archive(string reference, string outputPath) =>
+        Run($"Archive {reference}", new GitArgumentBuilder("archive")
+        {
+            $"--output={outputPath.Quote()}",
+            reference.Quote()
+        });
 
     /// <summary>
     ///  Stages every change in the working directory and commits it with <paramref name="message"/>.

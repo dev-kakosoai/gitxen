@@ -1,0 +1,79 @@
+<views:RepositoryPage
+    x:Class="GitExtensions.WinUI.Views.StashesView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="using:GitExtensions.WinUI.Converters"
+    xmlns:models="using:GitExtensions.WinUI.Models"
+    xmlns:views="using:GitExtensions.WinUI.Views">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,16">
+
+        <StackPanel Orientation="Horizontal" Spacing="24" HorizontalAlignment="Left">
+            <StackPanel Spacing="2">
+                <TextBlock Text="Stashes" Style="{StaticResource PageTitleStyle}" />
+                <TextBlock Text="Work set aside, most recent first."
+                           Style="{StaticResource PageSubtitleStyle}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Click="StashChanges_Click" Style="{ThemeResource AccentButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE710;" FontSize="12" />
+                        <TextBlock Text="Stash changes" />
+                    </StackPanel>
+                </Button>
+                <Button Click="Refresh_Click" ToolTipService.ToolTip="Refresh">
+                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                </Button>
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="10" VerticalAlignment="Center"
+                    Visibility="{x:Bind conv:Show.IfNone(Tab.Stashes.Count), Mode=OneWay}">
+            <FontIcon Glyph="&#xE7B8;" Style="{StaticResource EmptyStateGlyphStyle}" />
+            <TextBlock Text="No stashes" Style="{StaticResource EmptyStateTitleStyle}" />
+            <TextBlock Style="{StaticResource EmptyStateBodyStyle}"
+                       Text="Stashing puts your uncommitted changes aside so you can come back to them later." />
+        </StackPanel>
+
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,16,0,0"
+                Visibility="{x:Bind conv:Show.IfAny(Tab.Stashes.Count), Mode=OneWay}">
+            <ListView ItemsSource="{x:Bind Tab.Stashes, Mode=OneWay}" SelectionMode="Single" Padding="4"
+                      ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="models:StashInfo">
+                        <!-- Fixed widths rather than a star column: see BranchesView. -->
+                        <Grid ColumnDefinitions="110,520,90,Auto" ColumnSpacing="12">
+                            <Grid.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="Show changes…" Click="ShowDiff_Click" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem Text="Apply — keep the stash" Click="Apply_Click" />
+                                    <MenuFlyoutItem Text="Pop — apply and remove" Click="Pop_Click" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem Text="Drop…" Click="Drop_Click">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE74D;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </Grid.ContextFlyout>
+
+                            <TextBlock Text="{x:Bind Reference}" Style="{StaticResource HashTextStyle}"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Grid.Column="1" Text="{x:Bind Subject}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2" Text="{x:Bind ShortHash}"
+                                       Style="{StaticResource HashTextStyle}" />
+
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
+                                        VerticalAlignment="Center">
+                                <Button Content="Apply" Click="Apply_Click" Padding="8,2" FontSize="11" />
+                                <Button Content="Pop" Click="Pop_Click" Padding="8,2" FontSize="11" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Border>
+    </Grid>
+</views:RepositoryPage>

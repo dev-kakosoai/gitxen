@@ -1,12 +1,14 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using GitCommands;
 using GitExtensions.Extensibility.Git;
-using GitExtensions.WinUI.Diff;
 using GitExtensions.WinUI.Graph;
+using GitExtensions.WinUI.Models;
 using GitExtensions.WinUI.Services;
 using GitUIPluginInterfaces;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 
 namespace GitExtensions.WinUI.ViewModels;
 
@@ -23,8 +25,6 @@ public sealed class RepositoryTabViewModel : ObservableObject
     /// </summary>
     private static int MaxCommits => AppOptions.MaxCommits;
 
-    private static int MaxDiffLines => AppOptions.MaxDiffLines;
-
     /// <summary>
     ///  Every loaded commit. <see cref="Commits"/> is the filtered projection actually bound to the
     ///  list, so filtering never discards rows we would have to re-read from git.
@@ -36,13 +36,28 @@ public sealed class RepositoryTabViewModel : ObservableObject
 
     /// <summary>Rebuilt from scratch on a full reload; kept across pages so lanes stay continuous.</summary>
     private CommitGraphBuilder _graphBuilder = new();
+
+    /// <summary>
+    ///  Refs keyed by full commit hash, read once per reload so attaching badges to a streamed row is
+    ///  a dictionary lookup rather than a git call.
+    /// </summary>
+    private IReadOnlyDictionary<string, List<RefBadge>> _refsByCommit = new Dictionary<string, List<RefBadge>>();
+
     private CancellationTokenSource? _loadCts;
     private CancellationTokenSource? _changedFilesCts;
-    private CancellationTokenSource? _diffCts;
     private UiMode _mode;
     private string _branch = "";
+    private string _upstream = "";
+    private int _aheadCount;
+    private int _behindCount;
+    private int _pendingCount;
     private string _status = "";
+    private string _resultTitle = "";
+    private string _resultMessage = "";
+    private InfoBarSeverity _resultSeverity = InfoBarSeverity.Informational;
+    private bool _isResultOpen;
     private string _filter = "";
+    private RevisionQuery _query = RevisionQuery.Default;
     private bool _isLoading;
     private bool _hasMoreCommits;
     private bool _isBusy;
@@ -50,8 +65,6 @@ public sealed class RepositoryTabViewModel : ObservableObject
     private bool _suppressBranchCheckout;
     private CommitRowViewModel? _selectedCommit;
     private ChangedFileViewModel? _selectedChangedFile;
-    private string _diffTitle = "";
-    private bool _isSideBySide;
 
     public RepositoryTabViewModel(IGitExecutorProvider executorProvider, string workingDir, UiMode mode)
     {
@@ -60,6 +73,7 @@ public sealed class RepositoryTabViewModel : ObservableObject
         _mode = mode;
         WorkingDir = workingDir;
         Title = GetRepositoryName(workingDir);
+        Changes = new WorkingDirectoryViewModel(_loader, LoadAsync);
     }
 
     public string WorkingDir { get; }
@@ -69,31 +83,36 @@ public sealed class RepositoryTabViewModel : ObservableObject
     /// <summary>The commits currently shown — <see cref="_allCommits"/> passed through the filter.</summary>
     public ObservableCollection<CommitRowViewModel> Commits { get; } = [];
 
+    /// <summary>Files touched by the selected commit, shown alongside the history.</summary>
     public ObservableCollection<ChangedFileViewModel> ChangedFiles { get; } = [];
 
-    public ObservableCollection<DiffLineViewModel> DiffLines { get; } = [];
+    /// <summary>The History page's diff panel. The Changes page owns a separate one.</summary>
+    public DiffViewModel HistoryDiff { get; } = new();
 
-    public ObservableCollection<SideBySideRow> SideBySideLines { get; } = [];
+    /// <summary>Staging and committing, which the Changes page drives.</summary>
+    public WorkingDirectoryViewModel Changes { get; }
 
-    /// <summary>Unified or side-by-side; the diff panel shows one or the other.</summary>
-    public bool IsSideBySide
-    {
-        get => _isSideBySide;
-        set
-        {
-            if (SetProperty(ref _isSideBySide, value))
-            {
-                OnPropertyChanged(nameof(UnifiedVisibility));
-                OnPropertyChanged(nameof(SideBySideVisibility));
-                RebuildSideBySide();
-            }
-        }
-    }
+    // ---- Repository object pages ----------------------------------------------------------------
+    // Each page loads its own collection on first navigation and on refresh, rather than every tab
+    // paying for every listing up front.
 
-    public Visibility UnifiedVisibility => IsSideBySide ? Visibility.Collapsed : Visibility.Visible;
+    public ObservableCollection<BranchInfo> BranchDetails { get; } = [];
 
-    public Visibility SideBySideVisibility => IsSideBySide ? Visibility.Visible : Visibility.Collapsed;
+    public ObservableCollection<RemoteInfo> Remotes { get; } = [];
 
+    public ObservableCollection<TagInfo> Tags { get; } = [];
+
+    public ObservableCollection<StashInfo> Stashes { get; } = [];
+
+    public ObservableCollection<SubmoduleInfo> Submodules { get; } = [];
+
+    public ObservableCollection<WorktreeInfo> Worktrees { get; } = [];
+
+    public ObservableCollection<RemoteBranchInfo> RemoteBranches { get; } = [];
+
+    public ObservableCollection<ReflogEntry> Reflog { get; } = [];
+
+    /// <summary>Local branch names, for the pickers that just need a name.</summary>
     public ObservableCollection<string> Branches { get; } = [];
 
     /// <summary>
@@ -102,7 +121,10 @@ public sealed class RepositoryTabViewModel : ObservableObject
     /// </summary>
     public double GraphColumnWidth => CommitGraphBuilder.ColumnWidth;
 
-    /// <summary>Free-text filter over the loaded commits.</summary>
+    /// <summary>
+    ///  Free-text filter over the commits already loaded — an instant narrowing of what is on screen,
+    ///  not a search of the repository. <see cref="Query"/> is what asks git to search.
+    /// </summary>
     public string Filter
     {
         get => _filter;
@@ -112,6 +134,63 @@ public sealed class RepositoryTabViewModel : ObservableObject
             {
                 ApplyFilter();
             }
+        }
+    }
+
+    /// <summary>
+    ///  What git is asked to walk: the scope, and any message/author/content/path search.
+    /// </summary>
+    /// <remarks>
+    ///  Assigning this reloads, because these are filters git applies while walking history — unlike
+    ///  <see cref="Filter"/>, they can find commits that were never loaded.
+    /// </remarks>
+    public RevisionQuery Query
+    {
+        get => _query;
+        set
+        {
+            if (SetProperty(ref _query, value))
+            {
+                OnPropertyChanged(nameof(IsShowingAllBranches));
+                OnPropertyChanged(nameof(QueryVisibility));
+                OnPropertyChanged(nameof(QueryDescription));
+                _ = LoadAsync();
+            }
+        }
+    }
+
+    public bool IsShowingAllBranches => Query.Scope == RevisionScope.AllBranches;
+
+    /// <summary>Shown while git-side filters are narrowing the log, so an empty list is explicable.</summary>
+    public Visibility QueryVisibility => Query.HasFilters ? Visibility.Visible : Visibility.Collapsed;
+
+    public string QueryDescription
+    {
+        get
+        {
+            List<string> parts = [];
+
+            if (!string.IsNullOrWhiteSpace(Query.MessageContains))
+            {
+                parts.Add($"message contains \"{Query.MessageContains}\"");
+            }
+
+            if (!string.IsNullOrWhiteSpace(Query.Author))
+            {
+                parts.Add($"author \"{Query.Author}\"");
+            }
+
+            if (!string.IsNullOrWhiteSpace(Query.ContainingText))
+            {
+                parts.Add($"changes to \"{Query.ContainingText}\"");
+            }
+
+            if (!string.IsNullOrWhiteSpace(Query.Path))
+            {
+                parts.Add($"path \"{Query.Path}\"");
+            }
+
+            return parts.Count == 0 ? "" : $"Searching: {string.Join(", ", parts)}";
         }
     }
 
@@ -125,9 +204,9 @@ public sealed class RepositoryTabViewModel : ObservableObject
                 OnPropertyChanged(nameof(DetailsVisibility));
                 OnPropertyChanged(nameof(ChromeVisibility));
                 OnPropertyChanged(nameof(SecondaryColumnVisibility));
-                OnPropertyChanged(nameof(DiffVisibility));
                 OnPropertyChanged(nameof(LoadMoreVisibility));
                 OnPropertyChanged(nameof(AdvancedVisibility));
+                OnPropertyChanged(nameof(IsPaneOpen));
             }
         }
     }
@@ -135,13 +214,140 @@ public sealed class RepositoryTabViewModel : ObservableObject
     public string Branch
     {
         get => _branch;
-        private set => SetProperty(ref _branch, value);
+        private set
+        {
+            if (SetProperty(ref _branch, value))
+            {
+                OnPropertyChanged(nameof(BranchHeader));
+            }
+        }
     }
+
+    /// <summary>The upstream the current branch tracks, empty when it tracks nothing.</summary>
+    public string Upstream
+    {
+        get => _upstream;
+        private set
+        {
+            if (SetProperty(ref _upstream, value))
+            {
+                OnPropertyChanged(nameof(UpstreamVisibility));
+            }
+        }
+    }
+
+    public Visibility UpstreamVisibility => Upstream.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Commits on the current branch that the upstream does not have.</summary>
+    public int AheadCount
+    {
+        get => _aheadCount;
+        private set
+        {
+            if (SetProperty(ref _aheadCount, value))
+            {
+                OnPropertyChanged(nameof(AheadVisibility));
+            }
+        }
+    }
+
+    public int BehindCount
+    {
+        get => _behindCount;
+        private set
+        {
+            if (SetProperty(ref _behindCount, value))
+            {
+                OnPropertyChanged(nameof(BehindVisibility));
+            }
+        }
+    }
+
+    public Visibility AheadVisibility => AheadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility BehindVisibility => BehindCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Uncommitted change count, shown as a badge on the Changes navigation item.</summary>
+    public int PendingCount
+    {
+        get => _pendingCount;
+        private set
+        {
+            if (SetProperty(ref _pendingCount, value))
+            {
+                OnPropertyChanged(nameof(PendingVisibility));
+            }
+        }
+    }
+
+    public Visibility PendingVisibility => PendingCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>"main" or "main ↑2 ↓1" — the title-bar summary of where the repository stands.</summary>
+    public string BranchHeader => Branch.Length == 0 ? "(no branch)" : Branch;
 
     public string Status
     {
         get => _status;
         private set => SetProperty(ref _status, value);
+    }
+
+    // ---- Operation reporting --------------------------------------------------------------------
+    // Results land in an InfoBar on the repository view rather than a modal dialog: a fetch that
+    // found nothing should not need dismissing before the next action, and the output of the last
+    // operation is worth leaving on screen while you decide what to do about it.
+
+    public string ResultTitle
+    {
+        get => _resultTitle;
+        private set => SetProperty(ref _resultTitle, value);
+    }
+
+    public string ResultMessage
+    {
+        get => _resultMessage;
+        private set => SetProperty(ref _resultMessage, value);
+    }
+
+    public InfoBarSeverity ResultSeverity
+    {
+        get => _resultSeverity;
+        private set => SetProperty(ref _resultSeverity, value);
+    }
+
+    /// <summary>Two-way with the InfoBar so dismissing it closes it for good rather than reopening.</summary>
+    public bool IsResultOpen
+    {
+        get => _isResultOpen;
+        set => SetProperty(ref _isResultOpen, value);
+    }
+
+    /// <summary>
+    ///  Shows the outcome of a git operation. Success with no output closes the bar instead of
+    ///  announcing nothing — the refreshed list is its own confirmation.
+    /// </summary>
+    public void Report(GitOperationResult result)
+    {
+        bool hasOutput = !string.IsNullOrWhiteSpace(result.Output);
+
+        if (result.Succeeded && !hasOutput)
+        {
+            IsResultOpen = false;
+            return;
+        }
+
+        ResultTitle = result.Succeeded ? result.Description : $"{result.Description} failed";
+        ResultMessage = hasOutput ? result.Output.Trim() : "git reported a failure with no output.";
+        ResultSeverity = result.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error;
+        IsResultOpen = true;
+    }
+
+    /// <summary>Reports something the front-end itself decided, with no git command behind it.</summary>
+    public void ReportInformation(string title, string message)
+    {
+        ResultTitle = title;
+        ResultMessage = message;
+        ResultSeverity = InfoBarSeverity.Informational;
+        IsResultOpen = true;
     }
 
     public bool IsLoading
@@ -185,12 +391,19 @@ public sealed class RepositoryTabViewModel : ObservableObject
         {
             if (SetProperty(ref _selectedCommit, value))
             {
+                OnPropertyChanged(nameof(HasSelectedCommit));
+                OnPropertyChanged(nameof(SelectedCommitVisibility));
                 _ = LoadChangedFilesAsync(value);
             }
         }
     }
 
-    /// <summary>Selecting a changed file loads its diff into the bottom panel.</summary>
+    public bool HasSelectedCommit => SelectedCommit is not null;
+
+    /// <summary>Collapses the details pane's contents rather than showing empty fields.</summary>
+    public Visibility SelectedCommitVisibility => HasSelectedCommit ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Selecting a changed file loads its diff into the History page's diff panel.</summary>
     public ChangedFileViewModel? SelectedChangedFile
     {
         get => _selectedChangedFile;
@@ -198,16 +411,9 @@ public sealed class RepositoryTabViewModel : ObservableObject
         {
             if (SetProperty(ref _selectedChangedFile, value))
             {
-                OnPropertyChanged(nameof(DiffVisibility));
-                _ = LoadDiffAsync(value);
+                _ = LoadHistoryDiffAsync(value);
             }
         }
-    }
-
-    public string DiffTitle
-    {
-        get => _diffTitle;
-        private set => SetProperty(ref _diffTitle, value);
     }
 
     /// <summary>The commit cap was hit, so there is more history to page in.</summary>
@@ -226,7 +432,7 @@ public sealed class RepositoryTabViewModel : ObservableObject
     /// <summary>Commit-details pane: Advanced only.</summary>
     public Visibility DetailsVisibility => Mode == UiMode.Advanced ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>Anything Advanced-only that isn't the details pane (branch picker, filter box).</summary>
+    /// <summary>Anything Advanced-only that isn't the details pane (filter box, extra columns).</summary>
     public Visibility AdvancedVisibility => Mode == UiMode.Advanced ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Column headers, branch/path line: everything except Zen.</summary>
@@ -235,9 +441,15 @@ public sealed class RepositoryTabViewModel : ObservableObject
     /// <summary>Author and date columns — dropped in Zen so only the message remains.</summary>
     public Visibility SecondaryColumnVisibility => Mode == UiMode.Zen ? Visibility.Collapsed : Visibility.Visible;
 
-    /// <summary>The diff panel only takes up space once a file is actually selected.</summary>
-    public Visibility DiffVisibility =>
-        Mode == UiMode.Advanced && SelectedChangedFile is not null ? Visibility.Visible : Visibility.Collapsed;
+    /// <summary>Zen collapses the navigation pane to nothing; the other modes leave it open.</summary>
+    public bool IsPaneOpen => Mode != UiMode.Zen;
+
+    /// <summary>
+    ///  Zen drops the pane to its minimal form so the commit list is all that is left; every other
+    ///  mode shows the full left pane.
+    /// </summary>
+    public NavigationViewPaneDisplayMode PaneDisplayMode =>
+        Mode == UiMode.Zen ? NavigationViewPaneDisplayMode.LeftMinimal : NavigationViewPaneDisplayMode.Left;
 
     public Visibility LoadMoreVisibility =>
         HasMoreCommits && Mode != UiMode.Zen ? Visibility.Visible : Visibility.Collapsed;
@@ -250,6 +462,25 @@ public sealed class RepositoryTabViewModel : ObservableObject
 
     /// <summary>Appends the next page of older commits.</summary>
     public Task LoadMoreAsync() => LoadPageAsync(append: true);
+
+    // ---- Object page loads ----------------------------------------------------------------------
+
+    public Task LoadBranchesAsync() => ReplaceAsync(BranchDetails, _loader.GetBranches);
+
+    public Task LoadRemoteBranchesAsync() => ReplaceAsync(RemoteBranches, _loader.GetRemoteBranches);
+
+    /// <summary>Capped: the reflog is a recovery aid, not a history to page through.</summary>
+    public Task LoadReflogAsync() => ReplaceAsync(Reflog, () => _loader.GetReflog(maxCount: 200));
+
+    public Task LoadRemotesAsync() => ReplaceAsync(Remotes, _loader.GetRemotes);
+
+    public Task LoadTagsAsync() => ReplaceAsync(Tags, _loader.GetTags);
+
+    public Task LoadStashesAsync() => ReplaceAsync(Stashes, _loader.GetStashes);
+
+    public Task LoadSubmodulesAsync() => ReplaceAsync(Submodules, _loader.GetSubmodules);
+
+    public Task LoadWorktreesAsync() => ReplaceAsync(Worktrees, _loader.GetWorktrees);
 
     public Task<GitOperationResult> FetchAsync() => RunOperationAsync(loader => loader.Fetch());
 
@@ -264,28 +495,13 @@ public sealed class RepositoryTabViewModel : ObservableObject
     public Task<GitOperationResult> CommitAllAsync(string message) =>
         RunOperationAsync(loader => loader.CommitAll(message));
 
-    /// <summary>Commits only what is staged, so partial commits are possible.</summary>
-    public Task<GitOperationResult> CommitStagedAsync(string message, bool amend, bool signOff) =>
-        RunOperationAsync(loader => loader.Commit(message, amend, signOff));
-
     public Task<string> GetLastCommitMessageAsync() => Task.Run(_loader.GetLastCommitMessage);
 
-    /// <summary>The working-directory changes split by whether they are staged.</summary>
-    public Task<IReadOnlyList<ChangedFileViewModel>> GetWorkingDirectoryFilesAsync() =>
-        Task.Run<IReadOnlyList<ChangedFileViewModel>>(
-            () => _loader.GetWorkingDirectoryChanges()
-                .Select(file => new ChangedFileViewModel(file, isWorkingDirectory: true))
-                .ToList());
+    public Task<GitOperationResult> CheckoutBranchAsync(string branch) =>
+        RunOperationAsync(loader => loader.Checkout(branch));
 
-    /// <summary>Stages or unstages without the full reload a normal operation triggers.</summary>
-    public Task<GitOperationResult> SetStagedAsync(string fileName, bool staged) =>
-        Task.Run(() => staged ? _loader.StageFile(fileName) : _loader.UnstageFile(fileName));
-
-    public Task<GitOperationResult> StageAsync(string fileName) =>
-        RunOperationAsync(loader => loader.StageFile(fileName));
-
-    public Task<GitOperationResult> UnstageAsync(string fileName) =>
-        RunOperationAsync(loader => loader.UnstageFile(fileName));
+    public Task<GitOperationResult> CheckoutDetachedAsync(string reference) =>
+        RunOperationAsync(loader => loader.CheckoutDetached(reference));
 
     public Task<GitOperationResult> CreateBranchAsync(string branchName, bool checkout)
     {
@@ -298,20 +514,69 @@ public sealed class RepositoryTabViewModel : ObservableObject
         return RunOperationAsync(loader => loader.CreateBranch(branchName, objectId, checkout));
     }
 
+    /// <summary>Creates a branch at any resolvable reference — a reflog selector, a remote branch.</summary>
+    public Task<GitOperationResult> CreateBranchAtAsync(string branchName, string reference, bool checkout) =>
+        RunOperationAsync(loader => loader.CreateBranchAt(branchName, reference, checkout));
+
+    public Task<GitOperationResult> ResetToAsync(string reference, ResetMode mode) =>
+        RunOperationAsync(loader => loader.ResetTo(reference, mode));
+
     public Task<GitOperationResult> DeleteBranchAsync(string branchName, bool force) =>
         RunOperationAsync(loader => loader.DeleteBranch(branchName, force));
+
+    public Task<GitOperationResult> RenameBranchAsync(string oldName, string newName) =>
+        RunOperationAsync(loader => loader.RenameBranch(oldName, newName));
+
+    public Task<GitOperationResult> SetUpstreamAsync(string branch, string upstream) =>
+        RunOperationAsync(loader => loader.SetUpstream(branch, upstream));
 
     public Task<GitOperationResult> MergeBranchAsync(string branchName) =>
         RunOperationAsync(loader => loader.MergeBranch(branchName));
 
+    public Task<GitOperationResult> MergeBranchAsync(string branchName, MergeOptions options) =>
+        RunOperationAsync(loader => loader.MergeBranch(branchName, options));
+
+    public Task<GitOperationResult> PushAsync(PushOptions options) =>
+        RunOperationAsync(loader => loader.Push(options));
+
+    public Task<GitOperationResult> PullAsync(PullOptions options) =>
+        RunOperationAsync(loader => loader.Pull(options));
+
+    public Task<GitOperationResult> CheckoutBranchAsync(string branch, LocalChangesAction localChanges) =>
+        RunOperationAsync(loader => loader.Checkout(branch, localChanges));
+
+    public Task<GitOperationResult> DeleteRemoteBranchAsync(string remote, string branch) =>
+        RunOperationAsync(loader => loader.DeleteRemoteBranch(remote, branch));
+
+    public Task<GitOperationResult> CleanAsync(bool includeDirectories, bool includeIgnored, bool dryRun) =>
+        RunOperationAsync(loader => loader.Clean(includeDirectories, includeIgnored, dryRun));
+
+    public Task<GitOperationResult> CollectGarbageAsync() =>
+        RunOperationAsync(loader => loader.CollectGarbage());
+
+    public Task<GitOperationResult> ArchiveAsync(string reference, string outputPath) =>
+        RunOperationAsync(loader => loader.Archive(reference, outputPath));
+
+    public Task<string> GetStashDiffAsync(string reference) =>
+        Task.Run(() => _loader.GetStashDiff(reference));
+
     public Task<GitOperationResult> StashSaveAsync(string message) =>
         RunOperationAsync(loader => loader.StashSave(message));
 
-    public Task<GitOperationResult> StashListAsync() =>
-        RunOperationAsync(loader => loader.StashList());
+    public Task<GitOperationResult> StashSaveAsync(string message, bool includeUntracked, bool keepIndex) =>
+        RunOperationAsync(loader => loader.StashSave(message, includeUntracked, keepIndex));
 
     public Task<GitOperationResult> StashPopAsync() =>
         RunOperationAsync(loader => loader.StashPop());
+
+    public Task<GitOperationResult> StashApplyAsync(string reference) =>
+        RunOperationAsync(loader => loader.StashApply(reference));
+
+    public Task<GitOperationResult> StashPopAsync(string reference) =>
+        RunOperationAsync(loader => loader.StashPop(reference));
+
+    public Task<GitOperationResult> StashDropAsync(string reference) =>
+        RunOperationAsync(loader => loader.StashDrop(reference));
 
     /// <summary>
     ///  Operations that act on the selected commit. They report rather than throw when nothing is
@@ -344,8 +609,6 @@ public sealed class RepositoryTabViewModel : ObservableObject
     public Task<GitOperationResult> MarkResolvedAsync(string fileName) =>
         RunOperationAsync(loader => loader.MarkResolved(fileName));
 
-    public Task<GitOperationResult> ListTagsAsync() => RunReadOnlyAsync(loader => loader.ListTags());
-
     public Task<GitOperationResult> CreateTagAsync(string name, string message) =>
         RunOperationAsync(loader => loader.CreateTag(name, SelectedCommit?.Revision?.ObjectId, message));
 
@@ -355,29 +618,32 @@ public sealed class RepositoryTabViewModel : ObservableObject
     public Task<GitOperationResult> PushTagAsync(string name) =>
         RunOperationAsync(loader => loader.PushTag(name));
 
-    public Task<GitOperationResult> ListRemotesAsync() => RunReadOnlyAsync(loader => loader.ListRemotes());
-
     public Task<GitOperationResult> AddRemoteAsync(string name, string url) =>
         RunOperationAsync(loader => loader.AddRemote(name, url));
 
     public Task<GitOperationResult> RemoveRemoteAsync(string name) =>
         RunOperationAsync(loader => loader.RemoveRemote(name));
 
-    public Task<GitOperationResult> ListSubmodulesAsync() => RunReadOnlyAsync(loader => loader.ListSubmodules());
+    public Task<GitOperationResult> FetchRemoteAsync(string remote, bool prune) =>
+        RunOperationAsync(loader => loader.FetchRemote(remote, prune));
 
     public Task<GitOperationResult> UpdateSubmodulesAsync() =>
         RunOperationAsync(loader => loader.UpdateSubmodules());
 
+    public Task<GitOperationResult> UpdateSubmoduleAsync(string path) =>
+        RunOperationAsync(loader => loader.UpdateSubmodule(path));
+
     public Task<GitOperationResult> SyncSubmodulesAsync() =>
         RunOperationAsync(loader => loader.SyncSubmodules());
-
-    public Task<GitOperationResult> ListWorktreesAsync() => RunReadOnlyAsync(loader => loader.ListWorktrees());
 
     public Task<GitOperationResult> AddWorktreeAsync(string path, string branch) =>
         RunOperationAsync(loader => loader.AddWorktree(path, branch));
 
     public Task<GitOperationResult> RemoveWorktreeAsync(string path) =>
         RunOperationAsync(loader => loader.RemoveWorktree(path));
+
+    public Task<GitOperationResult> PruneWorktreesAsync() =>
+        RunOperationAsync(loader => loader.PruneWorktrees());
 
     /// <summary>Raw <c>git blame</c> output for the selected file at the selected commit.</summary>
     public Task<string> GetBlameAsync(string fileName)
@@ -401,7 +667,8 @@ public sealed class RepositoryTabViewModel : ObservableObject
     {
         _loadCts?.Cancel();
         _changedFilesCts?.Cancel();
-        _diffCts?.Cancel();
+        HistoryDiff.Clear();
+        Changes.Diff.Clear();
     }
 
     private async Task LoadPageAsync(bool append)
@@ -436,6 +703,7 @@ public sealed class RepositoryTabViewModel : ObservableObject
             if (!append)
             {
                 Branch = await Task.Run(_loader.GetCurrentBranch, cts.Token);
+                _refsByCommit = await Task.Run(_loader.GetRefsByCommit, cts.Token);
                 await RefreshBranchesAsync(cts.Token);
                 await AddWorkingDirectoryRowAsync(cts.Token);
             }
@@ -444,7 +712,8 @@ public sealed class RepositoryTabViewModel : ObservableObject
             // the time it runs the collection is fully populated — the DispatcherQueue is FIFO.
             StreamingObserver observer = new(_dispatcherQueue, cts.Token, batch => AddCommitBatch(batch, skip + MaxCommits), OnStreamFinished);
 
-            await Task.Run(() => _loader.StreamRevisions(observer, skip, cts.Token), cts.Token);
+            RevisionQuery query = Query;
+            await Task.Run(() => _loader.StreamRevisions(observer, skip, query, cts.Token), cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -474,7 +743,12 @@ public sealed class RepositoryTabViewModel : ObservableObject
                 return false;
             }
 
-            CommitRowViewModel row = new(revision) { GraphSegments = _graphBuilder.AddCommit(revision) };
+            CommitRowViewModel row = new(revision)
+            {
+                GraphSegments = _graphBuilder.AddCommit(revision),
+                Refs = _refsByCommit.TryGetValue(revision.ObjectId.ToString(), out List<RefBadge>? refs) ? refs : []
+            };
+
             _allCommits.Add(row);
 
             if (PassesFilter(row))
@@ -491,6 +765,8 @@ public sealed class RepositoryTabViewModel : ObservableObject
         IReadOnlyList<string> pending = await Task.Run<IReadOnlyList<string>>(
             () => _loader.GetWorkingDirectoryChanges().Select(file => file.Name).ToList(),
             cancellationToken);
+
+        PendingCount = pending.Count;
 
         if (pending.Count == 0)
         {
@@ -541,7 +817,29 @@ public sealed class RepositoryTabViewModel : ObservableObject
         int commitCount = _allCommits.Count(row => !row.IsWorkingDirectory);
         Status = commitCount == 0
             ? "No commits found."
-            : $"Showing {commitCount.ToString("N0", CultureInfo.InvariantCulture)} commits.";
+            : $"{commitCount.ToString("N0", CultureInfo.InvariantCulture)} commits";
+    }
+
+    /// <summary>
+    ///  Reloads one object collection off the UI thread. Failures leave the collection empty and are
+    ///  reported through <see cref="Status"/> rather than thrown — a listing page is not worth a crash.
+    /// </summary>
+    private async Task ReplaceAsync<T>(ObservableCollection<T> target, Func<IReadOnlyList<T>> read)
+    {
+        try
+        {
+            IReadOnlyList<T> items = await Task.Run(read);
+
+            target.Clear();
+            foreach (T item in items)
+            {
+                target.Add(item);
+            }
+        }
+        catch (Exception ex)
+        {
+            Status = ex.Message;
+        }
     }
 
     /// <summary>
@@ -587,22 +885,6 @@ public sealed class RepositoryTabViewModel : ObservableObject
         return RunOperationAsync(loader => operation(loader, commit));
     }
 
-    /// <summary>
-    ///  For listing commands, which change nothing and so don't need the reload that
-    ///  <see cref="RunOperationAsync"/> does afterwards.
-    /// </summary>
-    private async Task<GitOperationResult> RunReadOnlyAsync(Func<RepositoryLoader, GitOperationResult> operation)
-    {
-        try
-        {
-            return await Task.Run(() => operation(_loader));
-        }
-        catch (Exception ex)
-        {
-            return new GitOperationResult("Error", false, ex.Message);
-        }
-    }
-
     private async Task CheckoutAsync(string branch)
     {
         GitOperationResult result = await RunOperationAsync(loader => loader.Checkout(branch));
@@ -613,15 +895,31 @@ public sealed class RepositoryTabViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    ///  Refreshes the branch picker and the ahead/behind counters from one <c>for-each-ref</c> read,
+    ///  which reports both the names and the tracking state.
+    /// </summary>
     private async Task RefreshBranchesAsync(CancellationToken cancellationToken)
     {
-        IReadOnlyList<string> branches = await Task.Run(_loader.GetLocalBranches, cancellationToken);
+        IReadOnlyList<BranchInfo> branches = await Task.Run(_loader.GetBranches, cancellationToken);
 
+        BranchDetails.Clear();
         Branches.Clear();
-        foreach (string branch in branches)
+
+        foreach (BranchInfo branch in branches.OrderBy(branch => branch.Name, StringComparer.OrdinalIgnoreCase))
         {
-            Branches.Add(branch);
+            Branches.Add(branch.Name);
         }
+
+        foreach (BranchInfo branch in branches)
+        {
+            BranchDetails.Add(branch);
+        }
+
+        BranchInfo? current = branches.FirstOrDefault(branch => branch.IsCurrent);
+        Upstream = current?.Upstream ?? "";
+        AheadCount = current?.Ahead ?? 0;
+        BehindCount = current?.Behind ?? 0;
 
         // Reflect the checked-out branch without treating it as a request to check something out.
         _suppressBranchCheckout = true;
@@ -686,85 +984,19 @@ public sealed class RepositoryTabViewModel : ObservableObject
         }
     }
 
-    private async Task LoadDiffAsync(ChangedFileViewModel? file)
+    private Task LoadHistoryDiffAsync(ChangedFileViewModel? file)
     {
-        Cancel(ref _diffCts);
-        DiffLines.Clear();
-
-        if (file is null || SelectedCommit is null)
+        if (file is null || SelectedCommit is not CommitRowViewModel commit)
         {
-            DiffTitle = "";
-            return;
+            HistoryDiff.Clear();
+            return Task.CompletedTask;
         }
 
-        CancellationTokenSource cts = new();
-        _diffCts = cts;
-        DiffTitle = file.Name;
-
-        try
-        {
-            CommitRowViewModel commit = SelectedCommit;
-
-            string diff = await (commit.IsWorkingDirectory
-                ? Task.Run(() => _loader.GetWorkingDirectoryDiff(file.Name, file.OldName, file.IsStaged), cts.Token)
-                : _loader.GetDiffTextAsync(commit.Revision!, file.Name, file.OldName, cts.Token));
-
-            // The selection may have moved on while git was running.
-            if (!ReferenceEquals(SelectedChangedFile, file) || cts.Token.IsCancellationRequested)
-            {
-                return;
-            }
-
-            if (string.IsNullOrEmpty(diff))
-            {
-                DiffLines.Add(DiffLineViewModel.CreatePlain("(no textual diff — binary file, or no changes)"));
-                return;
-            }
-
-            IReadOnlyList<DiffLineViewModel> parsed = DiffParser.ParseUnified(diff, file.Name, MaxDiffLines, out int omitted);
-
-            foreach (DiffLineViewModel line in parsed)
-            {
-                DiffLines.Add(line);
-            }
-
-            if (omitted > 0)
-            {
-                DiffLines.Add(DiffLineViewModel.CreatePlain(
-                    $"… {omitted.ToString("N0", CultureInfo.InvariantCulture)} more lines not shown"));
-            }
-
-            RebuildSideBySide();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            DiffLines.Add(DiffLineViewModel.CreatePlain(ex.Message));
-        }
-        finally
-        {
-            if (ReferenceEquals(_diffCts, cts))
-            {
-                _diffCts = null;
-            }
-        }
-    }
-
-    private void RebuildSideBySide()
-    {
-        SideBySideLines.Clear();
-
-        if (!IsSideBySide)
-        {
-            return;
-        }
-
-        foreach (SideBySideRow row in DiffParser.ToSideBySide([.. DiffLines]))
-        {
-            SideBySideLines.Add(row);
-        }
+        return HistoryDiff.LoadAsync(
+            file.Name,
+            token => commit.IsWorkingDirectory
+                ? Task.Run(() => _loader.GetWorkingDirectoryDiff(file.Name, file.OldName, file.IsStaged), token)
+                : _loader.GetDiffTextAsync(commit.Revision!, file.Name, file.OldName, token));
     }
 
     /// <remarks>

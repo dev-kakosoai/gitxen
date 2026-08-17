@@ -51,6 +51,17 @@ public sealed class DiffLineViewModel
 
     public string NewLineNumber { get; }
 
+    /// <summary>
+    ///  The hunk this line belongs to, set on the hunk's own header row so that row can offer to stage
+    ///  or unstage it. Null everywhere else, and on diffs where staging makes no sense.
+    /// </summary>
+    public DiffHunk? Hunk { get; set; }
+
+    /// <summary>Only the header row of a hunk carries the stage/unstage affordance.</summary>
+    public Visibility HunkActionVisibility => Hunk is null ? Visibility.Collapsed : Visibility.Visible;
+
+    public string HunkSummary => Hunk?.Summary ?? "";
+
     public static DiffLineViewModel Create(string line, string fileName, int oldNumber = 0, int newNumber = 0)
     {
         DiffPalette palette = _palette ??= DiffPalette.ForCurrentTheme();

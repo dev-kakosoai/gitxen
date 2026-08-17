@@ -9,12 +9,21 @@ namespace GitExtensions.WinUI;
 public partial class App : Application
 {
     private readonly ServiceContainer _serviceContainer = new();
-    private Window? _window;
 
     public App()
     {
         InitializeComponent();
     }
+
+    /// <summary>
+    ///  The shell window.
+    /// </summary>
+    /// <remarks>
+    ///  Static because the file and folder pickers need an owning window handle, and a desktop WinUI
+    ///  app has no ambient one to fall back on — the pages that show a picker are several levels below
+    ///  the window and have no other route to it. This app only ever creates one window.
+    /// </remarks>
+    public static Window? Shell { get; private set; }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -28,7 +37,7 @@ public partial class App : Application
         AppSettings.LoadSettings();
 
         MainWindow window = new(_serviceContainer);
-        _window = window;
+        Shell = window;
         window.Activate();
 
         _ = window.RestoreSessionAsync();

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel.Design;
 using GitCommands;
 using GitExtensions.Extensibility.Git;
+using GitExtensions.WinUI.Models;
 using GitExtensions.WinUI.Services;
 using GitExtUtils;
 using Microsoft.UI.Xaml;
@@ -18,9 +19,12 @@ public sealed class MainViewModel : ObservableObject
     private UiMode _modeBeforeZen = UiMode.Simple;
     private RepositoryTabViewModel? _selectedTab;
 
+    private readonly RepositoryCreator _creator;
+
     public MainViewModel(ServiceContainer serviceContainer)
     {
         _executorProvider = serviceContainer.GetRequiredService<IGitExecutorProvider>();
+        _creator = new RepositoryCreator(_executorProvider);
     }
 
     public ObservableCollection<RepositoryTabViewModel> Tabs { get; } = [];
@@ -64,6 +68,13 @@ public sealed class MainViewModel : ObservableObject
 
     public Visibility EmptyStateVisibility => Tabs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
+    /// <summary>
+    ///  The TabView is collapsed rather than merely empty when nothing is open: an empty TabView still
+    ///  draws its strip and content border, which would frame the empty state instead of getting out
+    ///  of its way.
+    /// </summary>
+    public Visibility TabsVisibility => Tabs.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
     /// <summary>Toolbar entries that only Advanced mode exposes (Fetch, Push, branch/stash menu).</summary>
     public Visibility AdvancedVisibility => Mode == UiMode.Advanced ? Visibility.Visible : Visibility.Collapsed;
 
@@ -94,8 +105,39 @@ public sealed class MainViewModel : ObservableObject
         SelectedTab = tab;
         AddRecent(workingDir);
         OnPropertyChanged(nameof(EmptyStateVisibility));
+        OnPropertyChanged(nameof(TabsVisibility));
 
         await tab.LoadAsync();
+    }
+
+    /// <summary>
+    ///  Clones a repository and opens it. The clone runs off the UI thread — it is the one operation
+    ///  here that routinely takes minutes.
+    /// </summary>
+    public async Task<GitOperationResult> CloneAsync(string url, string parentDirectory, string folderName, bool recurseSubmodules)
+    {
+        (GitOperationResult result, string workingDirectory) = await Task.Run(
+            () => _creator.Clone(url, parentDirectory, folderName, recurseSubmodules));
+
+        if (result.Succeeded && workingDirectory.Length > 0)
+        {
+            await OpenRepositoryAsync(workingDirectory);
+        }
+
+        return result;
+    }
+
+    /// <summary>Initialises a repository and opens it, unless it is bare and so has no working tree.</summary>
+    public async Task<GitOperationResult> InitAsync(string directory, bool bare)
+    {
+        (GitOperationResult result, string workingDirectory) = await Task.Run(() => _creator.Init(directory, bare));
+
+        if (result.Succeeded && workingDirectory.Length > 0)
+        {
+            await OpenRepositoryAsync(workingDirectory);
+        }
+
+        return result;
     }
 
     /// <summary>Moves a repository to the front of the recent list, capped at ten.</summary>
@@ -120,6 +162,7 @@ public sealed class MainViewModel : ObservableObject
         tab.Close();
         Tabs.Remove(tab);
         OnPropertyChanged(nameof(EmptyStateVisibility));
+        OnPropertyChanged(nameof(TabsVisibility));
     }
 
     /// <summary>

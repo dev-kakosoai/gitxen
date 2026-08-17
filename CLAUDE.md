@@ -114,22 +114,34 @@ the installer and publish pipeline (no `BuildDependency` in `GitExtensions.slnx`
   version-resolution defects — each is commented in place. Do not "clean them up" without
   re-verifying the app still *launches*, not just builds: several of these failures only surface at
   runtime as `FileNotFoundException` on `WinRT.Runtime` / `Microsoft.Windows.SDK.NET`.
+- **Read `src/app/GitExtensions.WinUI/README.md` before working in this project.** It covers the
+  layout, the conventions below in more detail, and the feature coverage.
+- Shell: `MainWindow` (custom title bar, repo tab strip) → `RepositoryView` (nav pane, command bar,
+  result `InfoBar`) → one control per section under `Views/`, all deriving from `RepositoryPage`.
+  Sections are switched by visibility, not navigated to in a `Frame`, so scroll position and a
+  half-typed commit message survive moving between them.
 - UI modes (`UiMode.cs`): Simple (default), Advanced, and a hidden Zen mode reachable only via
   Ctrl+Shift+Z (Escape exits). One tab per repository, each with its own `RepositoryTabViewModel`.
 - Commits stream in as `git log` produces them, a page (`MaxCommits`, 2,000) at a time, with
   "Load more commits" paging via `--skip` spliced into `RevisionReader`'s `revisionFilter`. A
   selected file's diff is capped at 5,000 lines (`MaxDiffLines`). The caps exist because this repo
   alone has ~17k commits, which is more than an unvirtualized bound collection should hold.
-- Git operations (fetch/pull/push/checkout/commit) go through `RepositoryLoader`, which builds
-  arguments with the same `Commands`/`GitModule` factories the WinForms app uses and runs them via
-  `GitModule.GitExecutable.Execute(..., throwOnErrorExit: false)` — a non-zero exit is information
-  for the user, not an exception. Every operation returns a `GitOperationResult` and triggers a
-  reload. Push is confirmed first (it is the only one that changes something off this machine), and
-  commit is deliberately all-or-nothing: there is no partial staging UI yet, so it stages everything
-  and says so before committing.
+- Git operations go through `RepositoryLoader` (`.Objects.cs` holds the structured listings), which
+  builds arguments with the same `Commands`/`GitModule` factories the WinForms app uses and runs them
+  via `GitModule.GitExecutable.Execute(..., throwOnErrorExit: false)` — a non-zero exit is
+  information for the user, not an exception. Every operation returns a `GitOperationResult`,
+  surfaced in the repository's `InfoBar` rather than a modal dialog. Partial staging is done by
+  applying a single-hunk patch with `git apply --cached` (`Diff/HunkSplitter.cs`).
+- **Never put a literal tab in a `--format` argument.** `ArgumentBuilder` composes the whole argument
+  list into one command line and Windows splits it on tabs as well as spaces, so the format string
+  fragments and the command fails. Use `%09` (`for-each-ref`) or `%x09` (`git log` pretty formats).
+- **A Grid column placed after a star-sized column is arranged off-screen in this app** — cause not
+  found, see the README. Toolbars are left-aligned runs, list rows use fixed widths, and where a star
+  column is needed it goes last.
 - Session (open tabs, mode, window bounds) persists to
   `%LOCALAPPDATA%\GitExtensions.WinUI\session.json`; restore failures are recorded next to it in
   `restore-error.log` rather than silently leaving the shell looking like a first run.
+- There are no tests for this project yet; `Diff/HunkSplitter.cs` is the highest-value thing to cover.
 
 ## Hard rules that apply almost everywhere
 
