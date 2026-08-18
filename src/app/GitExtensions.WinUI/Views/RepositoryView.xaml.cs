@@ -42,6 +42,32 @@ public sealed partial class RepositoryView : UserControl
     {
         RefreshBranchMenu();
         RefreshExternalTools();
+        RestoreSection();
+    }
+
+    /// <summary>
+    ///  Selects the section this repository was last on.
+    /// </summary>
+    /// <remarks>
+    ///  Driven through the navigation selection rather than by showing the page directly, so the
+    ///  pane highlight and the page agree and the section is activated exactly as a click would.
+    /// </remarks>
+    private void RestoreSection()
+    {
+        if (Tab is not RepositoryTabViewModel tab || tab.LastSection.Length == 0)
+        {
+            return;
+        }
+
+        NavigationViewItem? item = Navigation.MenuItems
+            .Concat(Navigation.FooterMenuItems)
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate => (candidate.Tag as string) == tab.LastSection);
+
+        if (item is not null)
+        {
+            Navigation.SelectedItem = item;
+        }
     }
 
     /// <summary>The section pages, keyed by the Tag on their navigation item.</summary>
@@ -382,6 +408,12 @@ public sealed partial class RepositoryView : UserControl
         foreach (RepositoryPage page in pages.Values)
         {
             page.Visibility = ReferenceEquals(page, selected) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // Remembered so the repository reopens on the section it was left on.
+        if (Tab is RepositoryTabViewModel current)
+        {
+            current.LastSection = tag;
         }
 
         // Listings are read on arrival rather than up front, so opening a repository does not pay for

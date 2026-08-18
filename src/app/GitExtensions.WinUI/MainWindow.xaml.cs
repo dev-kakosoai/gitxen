@@ -36,6 +36,16 @@ public sealed partial class MainWindow : Window
     /// </remarks>
     private DispatcherQueueTimer? _autoFetchTimer;
 
+    /// <summary>
+    ///  Saves the session periodically rather than only on close.
+    /// </summary>
+    /// <remarks>
+    ///  Saving on close alone means a crash, a forced quit or a machine losing power throws away
+    ///  everything arranged since launch — the groups, the layout, a half-written commit message.
+    ///  A periodic save bounds that loss to the interval instead.
+    /// </remarks>
+    private DispatcherQueueTimer? _sessionSaveTimer;
+
     public MainWindow(ServiceContainer serviceContainer)
     {
         ViewModel = new MainViewModel(serviceContainer);
@@ -70,6 +80,12 @@ public sealed partial class MainWindow : Window
             AppOptions.Apply(state);
             ApplyTheme();
 
+            // The column keeps whatever width it was dragged to.
+            if (state.SidebarWidth > 120)
+            {
+                Sidebar.Width = state.SidebarWidth;
+            }
+
             if (state.Window is WindowBounds bounds && bounds.Width > 0 && bounds.Height > 0)
             {
                 AppWindow.MoveAndResize(new RectInt32(bounds.X, bounds.Y, bounds.Width, bounds.Height));
@@ -79,6 +95,7 @@ public sealed partial class MainWindow : Window
 
             SyncModeBar();
             StartAutoFetch();
+            StartSessionSaves();
             await Home.RefreshAsync();
         }
         catch (Exception ex)
@@ -105,6 +122,31 @@ public sealed partial class MainWindow : Window
         _autoFetchTimer.Start();
     }
 
+    private void StartSessionSaves()
+    {
+        _sessionSaveTimer?.Stop();
+        _sessionSaveTimer = DispatcherQueue.CreateTimer();
+        _sessionSaveTimer.Interval = TimeSpan.FromSeconds(30);
+        _sessionSaveTimer.Tick += (_, _) => SaveSession();
+        _sessionSaveTimer.Start();
+    }
+
+    /// <summary>Writes the session as it stands, including the window's current bounds.</summary>
+    private void SaveSession()
+    {
+        SessionState state = ViewModel.CaptureSession(new WindowBounds
+        {
+            X = AppWindow.Position.X,
+            Y = AppWindow.Position.Y,
+            Width = AppWindow.Size.Width,
+            Height = AppWindow.Size.Height
+        });
+
+        AppOptions.CopyTo(state);
+        state.SidebarWidth = Sidebar.Width;
+        SessionStore.Save(state);
+    }
+
     private async Task FetchAllQuietlyAsync()
     {
         foreach (RepositoryTabViewModel tab in ViewModel.Repositories.ToList())
@@ -115,17 +157,8 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
-        RectInt32 position = new(AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height);
-        SessionState state = ViewModel.CaptureSession(new WindowBounds
-        {
-            X = position.X,
-            Y = position.Y,
-            Width = position.Width,
-            Height = position.Height
-        });
-
-        AppOptions.CopyTo(state);
-        SessionStore.Save(state);
+        _sessionSaveTimer?.Stop();
+        SaveSession();
     }
 
     private async void RepositoryTabs_AddTabButtonClick(TabView sender, object args) =>

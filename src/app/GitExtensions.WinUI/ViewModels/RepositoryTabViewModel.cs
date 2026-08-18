@@ -91,6 +91,15 @@ public sealed class RepositoryTabViewModel : ShellTab
 
     public override bool IsHome => false;
 
+    /// <summary>
+    ///  Navigation tag of the section last shown, so the repository reopens where it was left.
+    /// </summary>
+    /// <remarks>
+    ///  Assigned by the view rather than derived here: the tab has no notion of pages, and which
+    ///  section is showing is a fact about the view, not about the repository.
+    /// </remarks>
+    public string LastSection { get; set; } = "";
+
     /// <summary>The commits currently shown — <see cref="_allCommits"/> passed through the filter.</summary>
     public ObservableCollection<CommitRowViewModel> Commits { get; } = [];
 
@@ -238,6 +247,20 @@ public sealed class RepositoryTabViewModel : ShellTab
                 _ = LoadAsync();
             }
         }
+    }
+
+    /// <summary>
+    ///  Sets the scope without triggering a reload, for restoring a session.
+    /// </summary>
+    /// <remarks>
+    ///  The Query setter reloads, which is right when the user changes the scope and wrong when the
+    ///  caller is about to load anyway — that would read the whole history twice on every start-up.
+    /// </remarks>
+    public void SetInitialScope(RevisionScope scope)
+    {
+        _query = _query with { Scope = scope };
+        OnPropertyChanged(nameof(Query));
+        OnPropertyChanged(nameof(IsShowingAllBranches));
     }
 
     public bool IsShowingAllBranches => Query.Scope == RevisionScope.AllBranches;

@@ -31,6 +31,12 @@ public sealed class SessionState
     /// <summary>Repository groups, in display order.</summary>
     public List<SavedGroup> Groups { get; set; } = [];
 
+    /// <summary>Per-repository state, so each one reopens the way it was left.</summary>
+    public List<SavedRepositoryState> RepositoryStates { get; set; } = [];
+
+    /// <summary>Width of the repository column, in effective pixels.</summary>
+    public double SidebarWidth { get; set; } = 280;
+
     public WindowBounds? Window { get; set; }
 }
 
@@ -53,6 +59,32 @@ public sealed class SavedGroup
     public bool IsExpanded { get; set; } = true;
 
     public List<string> Repositories { get; set; } = [];
+}
+
+/// <summary>
+///  How one repository was left: which section, what was being typed, how the diff was being read.
+/// </summary>
+/// <remarks>
+///  Keyed by working directory rather than by tab position, so state follows the repository across
+///  being closed and reopened, and across tabs being reordered by their project.
+/// </remarks>
+public sealed class SavedRepositoryState
+{
+    public string Path { get; set; } = "";
+
+    /// <summary>Navigation tag, e.g. "history"; empty falls back to the default section.</summary>
+    public string Section { get; set; } = "";
+
+    /// <summary>
+    ///  An uncommitted message. Losing a half-written commit message to a restart is the single most
+    ///  annoying thing a git client can do, so it is kept with the rest of the state.
+    /// </summary>
+    public string CommitDraft { get; set; } = "";
+
+    public bool DiffSideBySide { get; set; }
+
+    /// <summary>Whether History was showing every branch or only the current one.</summary>
+    public bool AllBranches { get; set; }
 }
 
 public sealed class WindowBounds
@@ -123,17 +155,29 @@ internal static class SessionStore
         }
     }
 
+    /// <summary>
+    ///  Writes the session, replacing the previous file only once the new one is complete.
+    /// </summary>
+    /// <remarks>
+    ///  Written to a temporary file and then moved into place. A crash or a power cut part-way through
+    ///  a direct write leaves a truncated file, which fails to parse on the next launch and silently
+    ///  looks like a first run — everything the user had arranged, gone. The move is atomic, so the
+    ///  worst case becomes losing the most recent save rather than all of them.
+    /// </remarks>
     public static void Save(SessionState state)
     {
         try
         {
             string path = SessionFilePath;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(state, _options));
+
+            string temporary = path + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(state, _options));
+            File.Move(temporary, path, overwrite: true);
         }
         catch (Exception)
         {
-            // Losing the session is not worth surfacing an error over.
+            // Losing one save is not worth surfacing an error over; the next one will succeed.
         }
     }
 }

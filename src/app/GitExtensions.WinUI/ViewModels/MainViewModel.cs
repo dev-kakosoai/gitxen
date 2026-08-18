@@ -167,6 +167,11 @@ public sealed class MainViewModel : ObservableObject
         }
 
         RepositoryTabViewModel tab = new(_executorProvider, workingDir, Mode);
+
+        // Applied before the first load so a restored branch scope does not cost a second read of
+        // the whole history.
+        ApplySavedState(tab);
+
         Tabs.Add(tab);
         SelectedTab = tab;
         AddRecent(workingDir);
@@ -518,6 +523,57 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    // ---- Per-repository state --------------------------------------------------------------------
+    // Keyed by working directory, so it follows a repository across being closed and reopened, and
+    // across tabs being reordered by their project.
+
+    private readonly Dictionary<string, SavedRepositoryState> _savedStates =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Restores how a repository was last left, if this session has seen it before.</summary>
+    private void ApplySavedState(RepositoryTabViewModel tab)
+    {
+        if (!_savedStates.TryGetValue(tab.WorkingDir, out SavedRepositoryState? saved))
+        {
+            return;
+        }
+
+        tab.LastSection = saved.Section;
+        tab.Changes.Message = saved.CommitDraft;
+        tab.HistoryDiff.IsSideBySide = saved.DiffSideBySide;
+
+        if (saved.AllBranches)
+        {
+            // Set directly rather than through Query, whose setter triggers a reload the caller is
+            // about to perform anyway.
+            tab.SetInitialScope(RevisionScope.AllBranches);
+        }
+    }
+
+    /// <summary>
+    ///  Records the state of every repository this session knows about.
+    /// </summary>
+    /// <remarks>
+    ///  Open repositories are read from their tabs; ones since closed keep whatever was recorded when
+    ///  they were, so closing a repository does not throw away how it was arranged.
+    /// </remarks>
+    private List<SavedRepositoryState> CaptureRepositoryStates()
+    {
+        foreach (RepositoryTabViewModel tab in Repositories)
+        {
+            _savedStates[tab.WorkingDir] = new SavedRepositoryState
+            {
+                Path = tab.WorkingDir,
+                Section = tab.LastSection,
+                CommitDraft = tab.Changes.Message,
+                DiffSideBySide = tab.HistoryDiff.IsSideBySide,
+                AllBranches = tab.Query.Scope == RevisionScope.AllBranches
+            };
+        }
+
+        return [.. _savedStates.Values];
+    }
+
     public void CloseTab(ShellTab tab)
     {
         if (tab is not RepositoryTabViewModel repository)
@@ -544,6 +600,11 @@ public sealed class MainViewModel : ObservableObject
         Mode = state.Mode == UiMode.Zen ? UiMode.Simple : state.Mode;
 
         RestoreGroups(state.Groups);
+
+        foreach (SavedRepositoryState saved in state.RepositoryStates)
+        {
+            _savedStates[saved.Path] = saved;
+        }
 
         foreach (string recent in state.Recent)
         {
@@ -578,6 +639,7 @@ public sealed class MainViewModel : ObservableObject
             SelectedIndex = SelectedRepository is null ? -1 : opened.IndexOf(SelectedRepository),
             Recent = Recent.ToList(),
             Groups = CaptureGroups(),
+            RepositoryStates = CaptureRepositoryStates(),
             Window = window
         };
     }
