@@ -1,9 +1,20 @@
-# GitExtensions.WinUI
+# Gitxen
 
-An experimental WinUI 3 front-end for Git Extensions. It drives the same backend as the WinForms app
-(`GitCommands`, `GitExtUtils`, `GitExtensions.Extensibility` — deliberately no `GitUI` dependency) and
-is staged alongside it rather than replacing it. It is excluded from the installer and the publish
-pipeline.
+Gitxen is a free, open-source git client for Windows, built with WinUI 3.
+
+It is a **derivative work of [Git Extensions](https://github.com/gitextensions/gitextensions)** and is
+distributed under the same licence, **GPL-3.0** — see [LICENSE.md](../../../LICENSE.md) and
+[NOTICE.md](../../../NOTICE.md). Copyright in the original work remains with the Git Extensions
+authors; Gitxen is not endorsed by or affiliated with that project.
+
+It reuses the Git Extensions engine as-is (`GitCommands`, `GitExtUtils`,
+`GitExtensions.Extensibility` — deliberately no `GitUI` dependency) and is built alongside the
+original WinForms application rather than replacing it. It is excluded from the installer and the
+publish pipeline.
+
+The project directory, assembly and namespaces are still named `GitExtensions.WinUI`. Renaming those
+is a mechanical but wide-reaching change, kept separate from the product rename so that the two do not
+land in one commit.
 
 ## Building and running
 
@@ -68,8 +79,8 @@ trimmed off before parsing. Requiring a full field count silently drops exactly 
 should hold. Paging uses `--skip`, spliced into `RevisionReader`'s `revisionFilter`.
 
 **Session state** — open tabs, UI mode, window bounds, settings — persists to
-`%LOCALAPPDATA%\GitExtensions.WinUI\session.json`. Restore failures are written to `restore-error.log`
-beside it rather than leaving the shell silently looking like a first run.
+`%LOCALAPPDATA%\Gitxen\session.json`. Restore failures are written to `restore-error.log`
+beside it rather than leaving the shell silently looking like a first run. A session written by a build from before the rename is carried over from the old folder on first launch.
 
 ## A layout constraint you will hit
 

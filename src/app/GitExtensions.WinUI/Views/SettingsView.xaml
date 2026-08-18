@@ -69,14 +69,31 @@
                 </StackPanel>
             </Border>
 
-            <!-- About -->
+            <!--
+                The licence and the derivation are stated in the application itself, not only in a file
+                in the repository: GPL-3.0 expects an interactive program to keep showing the notices
+                the original carried, and someone running a build has no other way to find out where it
+                came from or what they are entitled to do with it.
+            -->
             <Border Style="{StaticResource CardBorderStyle}" Padding="16">
-                <StackPanel Spacing="6">
-                    <TextBlock Text="About" FontWeight="SemiBold" />
+                <StackPanel Spacing="10">
+                    <TextBlock Text="About Gitxen" FontWeight="SemiBold" />
+
                     <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
-                               Text="An experimental WinUI 3 front-end for Git Extensions. It drives the same git backend as the WinForms app and is staged alongside it rather than replacing it." />
+                               Text="Gitxen is a free, open-source git client for Windows." />
+
                     <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
-                               Text="Session state — open repositories, window position and these settings — is kept in %LOCALAPPDATA%\GitExtensions.WinUI." />
+                               Text="It is a derivative work of Git Extensions and is distributed under the same licence, the GNU General Public License version 3. Copyright in the original work remains with the Git Extensions authors. Gitxen is not endorsed by or affiliated with that project." />
+
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <HyperlinkButton Content="Git Extensions (upstream)" Padding="0"
+                                         NavigateUri="https://github.com/gitextensions/gitextensions" />
+                        <HyperlinkButton Content="GPL-3.0 licence" Padding="0"
+                                         NavigateUri="https://www.gnu.org/licenses/gpl-3.0.html" />
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                               Text="Your settings, projects and per-repository state are kept under %LOCALAPPDATA%\Gitxen, which is private to your Windows account." />
                 </StackPanel>
             </Border>
         </StackPanel>

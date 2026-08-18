@@ -113,13 +113,58 @@ internal static class SessionStore
         Converters = { new JsonStringEnumConverter() }
     };
 
-    private static string SessionFilePath => Path.Combine(
+    /// <summary>
+    ///  Where the session lives: under the current Windows user's local app data.
+    /// </summary>
+    /// <remarks>
+    ///  Per user rather than per machine, so two accounts keep entirely separate state and nothing
+    ///  needs a login. Local rather than roaming: it records window bounds and machine-specific paths,
+    ///  which have no business following the user to another machine.
+    /// </remarks>
+    private static string SessionDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "GitExtensions.WinUI",
-        "session.json");
+        "Gitxen");
+
+    /// <summary>The folder used before the product was named, kept only so state can be carried over.</summary>
+    private static string LegacyDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "GitExtensions.WinUI");
+
+    private static string SessionFilePath => Path.Combine(SessionDirectory, "session.json");
+
+    /// <summary>
+    ///  Carries a session written under the old folder name across to the new one.
+    /// </summary>
+    /// <remarks>
+    ///  Copied rather than moved, and only when the new location has nothing in it: renaming the
+    ///  product should not be able to lose someone's groups and layout, and leaving the old file in
+    ///  place means a build from before the rename still finds its own state.
+    /// </remarks>
+    private static void MigrateLegacySession()
+    {
+        try
+        {
+            string current = SessionFilePath;
+            string legacy = Path.Combine(LegacyDirectory, "session.json");
+
+            if (File.Exists(current) || !File.Exists(legacy))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(SessionDirectory);
+            File.Copy(legacy, current);
+        }
+        catch (Exception)
+        {
+            // Starting fresh is a far better outcome than refusing to start.
+        }
+    }
 
     public static SessionState Load()
     {
+        MigrateLegacySession();
+
         try
         {
             string path = SessionFilePath;

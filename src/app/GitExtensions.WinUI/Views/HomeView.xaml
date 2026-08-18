@@ -57,9 +57,9 @@
         <StackPanel Padding="40,32,40,40" Spacing="28" MaxWidth="1080" HorizontalAlignment="Left">
 
             <StackPanel Spacing="6">
-                <TextBlock Text="Git Extensions" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Text="Gitxen" FontSize="30" FontWeight="SemiBold" />
                 <TextBlock Style="{StaticResource PageSubtitleStyle}" FontSize="14"
-                           Text="An experimental WinUI front-end. Open a repository to get started." />
+                           Text="A free, open-source git client for Windows. Open a repository to get started." />
             </StackPanel>
 
             <!-- Start -->

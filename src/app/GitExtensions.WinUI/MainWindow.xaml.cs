@@ -51,7 +51,7 @@ public sealed partial class MainWindow : Window
         ViewModel = new MainViewModel(serviceContainer);
         InitializeComponent();
 
-        Title = "Git Extensions";
+        Title = "Gitxen";
 
         // Draw into the title bar so the window reads as one surface rather than a WinUI app wearing a
         // system caption. The drag region is the empty strip left of the caption buttons.

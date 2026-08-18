@@ -47,7 +47,7 @@
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <FontIcon Glyph="&#xE8AB;" FontSize="15"
                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                <TextBlock Text="Git Extensions" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock Text="Gitxen" FontWeight="SemiBold" VerticalAlignment="Center" />
             </StackPanel>
 
             <!-- Simple keeps the everyday view; Advanced adds the details pane, the commit filter
