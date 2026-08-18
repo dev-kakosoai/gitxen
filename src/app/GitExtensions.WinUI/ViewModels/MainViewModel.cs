@@ -39,6 +39,15 @@ public sealed class MainViewModel : ObservableObject
     /// </summary>
     public ObservableCollection<RepositoryGroup> Groups { get; } = [];
 
+    /// <summary>
+    ///  The open repositories, sectioned by project, for the repository column.
+    /// </summary>
+    /// <remarks>
+    ///  A separate projection from <see cref="Tabs"/> because the column and the tab strip need
+    ///  different shapes of the same thing: the column shows sections, the strip is necessarily flat.
+    /// </remarks>
+    public ObservableCollection<ShellTabGroup> TabGroups { get; } = [];
+
     /// <summary>Recent repositories that are not in any group.</summary>
     public RepositoryGroup Ungrouped { get; } = new("Ungrouped", GroupIcons.Default, "Slate");
 
@@ -161,6 +170,7 @@ public sealed class MainViewModel : ObservableObject
         Tabs.Add(tab);
         SelectedTab = tab;
         AddRecent(workingDir);
+        RegroupTabs();
 
         await tab.LoadAsync();
     }
@@ -341,8 +351,89 @@ public sealed class MainViewModel : ObservableObject
         }
 
         Ungrouped.RaiseCountChanged();
+        RegroupTabs();
         OnPropertyChanged(nameof(HasGroups));
         OnPropertyChanged(nameof(UngroupedVisibility));
+    }
+
+    /// <summary>
+    ///  Re-sections the open repositories and puts the tab strip in project order.
+    /// </summary>
+    /// <remarks>
+    ///  The strip cannot show sections — it is one row of tabs — so grouping is expressed there by
+    ///  ordering, which keeps a project's repositories adjacent, and by the colour each tab carries.
+    ///  Home always leads, since it is the one tab that is not a repository.
+    /// </remarks>
+    private void RegroupTabs()
+    {
+        foreach (RepositoryTabViewModel tab in Repositories)
+        {
+            tab.Group = _groupByPath.TryGetValue(tab.WorkingDir, out string? name)
+                ? Groups.FirstOrDefault(group => string.Equals(group.Name, name, StringComparison.OrdinalIgnoreCase))
+                : null;
+        }
+
+        TabGroups.Clear();
+
+        foreach (RepositoryGroup group in Groups)
+        {
+            ShellTabGroup section = new(group);
+
+            if (group.IsExpanded)
+            {
+                foreach (RepositoryTabViewModel tab in Repositories.Where(tab => ReferenceEquals(tab.Group, group)))
+                {
+                    section.Items.Add(tab);
+                }
+            }
+
+            // Empty projects are still listed: the header is the drop target that puts one back.
+            TabGroups.Add(section);
+        }
+
+        ShellTabGroup ungrouped = new(null);
+
+        foreach (RepositoryTabViewModel tab in Repositories.Where(tab => tab.Group is null))
+        {
+            ungrouped.Items.Add(tab);
+        }
+
+        if (ungrouped.Items.Count > 0 || TabGroups.Count == 0)
+        {
+            TabGroups.Add(ungrouped);
+        }
+
+        ReorderTabs();
+    }
+
+    /// <summary>Puts the strip in project order without disturbing the selection.</summary>
+    private void ReorderTabs()
+    {
+        List<ShellTab> ordered = [Home];
+
+        foreach (RepositoryGroup group in Groups)
+        {
+            ordered.AddRange(Repositories.Where(tab => ReferenceEquals(tab.Group, group)));
+        }
+
+        ordered.AddRange(Repositories.Where(tab => tab.Group is null));
+
+        for (int index = 0; index < ordered.Count; index++)
+        {
+            int current = Tabs.IndexOf(ordered[index]);
+
+            if (current >= 0 && current != index)
+            {
+                Tabs.Move(current, index);
+            }
+        }
+    }
+
+    /// <summary>Collapses or expands a project in the repository column.</summary>
+    public void ToggleGroupExpanded(RepositoryGroup group)
+    {
+        group.IsExpanded = !group.IsExpanded;
+        RegroupTabs();
     }
 
     public bool HasGroups => Groups.Count > 0;

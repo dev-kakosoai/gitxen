@@ -1,10 +1,12 @@
 using System.ComponentModel.Design;
+using GitExtensions.WinUI.Models;
 using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
 using GitExtensions.WinUI.Views;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
@@ -45,6 +47,9 @@ public sealed partial class MainWindow : Window
         // system caption. The drag region is the empty strip left of the caption buttons.
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarDragRegion);
+
+        // The grouped source is a resource, so it cannot be bound with x:Bind from the markup.
+        ((CollectionViewSource)RootGrid.Resources["GroupedTabsSource"]).Source = ViewModel.TabGroups;
 
         Closed += MainWindow_Closed;
     }
@@ -152,6 +157,56 @@ public sealed partial class MainWindow : Window
     }
 
     private async void Home_OpenRequested(object? sender, string path) => await OpenRecentAsync(path);
+
+    // ---- Repository column -----------------------------------------------------------------------
+
+    /// <summary>The repository being dragged between projects in the column.</summary>
+    private ShellTab? _draggingTab;
+
+    private void SelectHome_Click(object sender, RoutedEventArgs e) => ViewModel.SelectedTab = ViewModel.Home;
+
+    private void ToggleSidebarGroup_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is ShellTabGroup { Group: RepositoryGroup group })
+        {
+            ViewModel.ToggleGroupExpanded(group);
+        }
+    }
+
+    private void SidebarItem_DragStarting(UIElement sender, DragStartingEventArgs args)
+    {
+        _draggingTab = (sender as FrameworkElement)?.DataContext as ShellTab;
+
+        // Something has to be offered or the drop targets never light up.
+        args.Data.SetText(_draggingTab?.Description ?? "");
+        args.Data.RequestedOperation = DataPackageOperation.Move;
+    }
+
+    private void SidebarGroup_DragOver(object sender, DragEventArgs e)
+    {
+        e.AcceptedOperation = _draggingTab is null ? DataPackageOperation.None : DataPackageOperation.Move;
+        e.DragUIOverride.Caption = "Move to this project";
+        e.DragUIOverride.IsGlyphVisible = false;
+    }
+
+    /// <summary>
+    ///  Drops a repository onto a project header in the column.
+    /// </summary>
+    /// <remarks>
+    ///  Goes through the same assignment the Home page uses, so a repository moved here is moved
+    ///  everywhere — the column, the tab order and the Home page all read the one membership.
+    /// </remarks>
+    private void SidebarGroup_Drop(object sender, DragEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not ShellTabGroup section
+            || _draggingTab is not RepositoryTabViewModel repository)
+        {
+            return;
+        }
+
+        _draggingTab = null;
+        ViewModel.AssignToGroup(repository.WorkingDir, section.Group);
+    }
 
     private void CloseRepository_Click(object sender, RoutedEventArgs e)
     {

@@ -14,6 +14,12 @@
 
     <Grid x:Name="RootGrid" RowDefinitions="Auto,*"
           AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop">
+        <Grid.Resources>
+            <!-- Its Source is assigned in code: a CollectionViewSource is a resource rather than part
+                 of the tree, so x:Bind cannot reach the view model from here. -->
+            <CollectionViewSource x:Key="GroupedTabsSource" IsSourceGrouped="True" ItemsPath="Items" />
+        </Grid.Resources>
+
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Modifiers="Control" Key="O" Invoked="OpenRepositoryAccelerator_Invoked" />
             <KeyboardAccelerator Modifiers="Control" Key="T" Invoked="OpenRepositoryAccelerator_Invoked" />
@@ -61,12 +67,13 @@
                 The repository column. An alternative to the tab strip rather than an addition: which
                 one suits depends on how many repositories are open and how long their names are.
             -->
-            <Border x:Name="Sidebar" Grid.Column="0" Width="260"
+            <Border x:Name="Sidebar" Grid.Column="0" Width="280"
                     BorderThickness="0,0,1,0"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     Visibility="{x:Bind ViewModel.SidebarVisibility, Mode=OneWay}">
-                <Grid RowDefinitions="Auto,*">
-                    <StackPanel Orientation="Horizontal" Spacing="8" Padding="16,12,12,10">
+                <Grid RowDefinitions="Auto,Auto,*">
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" Padding="16,12,12,8">
                         <TextBlock Text="Repositories" Style="{StaticResource SectionCaptionStyle}"
                                    VerticalAlignment="Center" />
                         <Button Click="AddRepository_Click" Padding="6,2"
@@ -75,26 +82,77 @@
                         </Button>
                     </StackPanel>
 
-                    <ListView Grid.Row="1" ItemsSource="{x:Bind ViewModel.Tabs, Mode=OneWay}"
+                    <!-- Home sits outside the grouped list: it is not a repository, so it belongs to
+                         no project, and keeping it out leaves the list with exactly one selection. -->
+                    <Button Grid.Row="1" Click="SelectHome_Click" Margin="8,0,8,6"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Padding="10,7">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE80F;" FontSize="13" />
+                            <TextBlock Text="Home" />
+                        </StackPanel>
+                    </Button>
+
+                    <!--
+                        Grouped rather than one list per project: nesting lists would give each project
+                        its own selection, and the column has to have exactly one.
+                    -->
+                    <ListView Grid.Row="2" x:Name="SidebarList"
+                              ItemsSource="{Binding Source={StaticResource GroupedTabsSource}}"
                               SelectedItem="{x:Bind ViewModel.SelectedTab, Mode=TwoWay}"
                               SelectionMode="Single" Padding="6,0,6,8"
                               ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+                        <ListView.GroupStyle>
+                            <GroupStyle HidesIfEmpty="False">
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate x:DataType="vm:ShellTabGroup">
+                                        <Border Background="{x:Bind Tint, Mode=OneWay}" CornerRadius="5"
+                                                Padding="8,5" Margin="0,6,0,3"
+                                                AllowDrop="True" DragOver="SidebarGroup_DragOver"
+                                                Drop="SidebarGroup_Drop" Tag="{x:Bind}">
+                                            <Grid ColumnDefinitions="Auto,Auto,120,Auto" ColumnSpacing="8">
+                                                <Button Click="ToggleSidebarGroup_Click" Tag="{x:Bind}"
+                                                        Padding="3,1" VerticalAlignment="Center"
+                                                        Visibility="{x:Bind ActionsVisibility}"
+                                                        ToolTipService.ToolTip="Collapse or expand">
+                                                    <FontIcon Glyph="&#xE70D;" FontSize="9" />
+                                                </Button>
+                                                <FontIcon Grid.Column="1" Glyph="{x:Bind Glyph, Mode=OneWay}"
+                                                          FontSize="12" VerticalAlignment="Center"
+                                                          Foreground="{x:Bind Accent, Mode=OneWay}" />
+                                                <TextBlock Grid.Column="2" Text="{x:Bind Name, Mode=OneWay}"
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <InfoBadge Grid.Column="3" Value="{x:Bind Count, Mode=OneWay}"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListView.GroupStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="vm:ShellTab">
-                                <Grid ColumnDefinitions="Auto,170,Auto" ColumnSpacing="10" Padding="4,3">
-                                    <FontIcon Glyph="&#xE80F;" FontSize="13" VerticalAlignment="Center"
-                                              Visibility="{x:Bind conv:Show.If(IsHome)}" />
-                                    <FontIcon Glyph="&#xE8B7;" FontSize="13" VerticalAlignment="Center"
-                                              Visibility="{x:Bind conv:Show.IfNot(IsHome)}" />
+                                <Grid ColumnDefinitions="Auto,Auto,140,Auto" ColumnSpacing="8" Padding="4,3"
+                                      CanDrag="True" DragStarting="SidebarItem_DragStarting">
+                                    <!-- The project's colour, so a row is placeable even when its
+                                         section header has scrolled out of view. -->
+                                    <Border Width="3" CornerRadius="2" Margin="0,2"
+                                            Background="{x:Bind Accent, Mode=OneWay}"
+                                            Visibility="{x:Bind GroupVisibility, Mode=OneWay}" />
 
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <FontIcon Grid.Column="1" Glyph="&#xE8B7;" FontSize="13"
+                                              VerticalAlignment="Center" />
+
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Text="{x:Bind Description}" FontSize="11"
                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
 
-                                    <Button Grid.Column="2" Click="CloseRepository_Click" Tag="{x:Bind}"
+                                    <Button Grid.Column="3" Click="CloseRepository_Click" Tag="{x:Bind}"
                                             Padding="6,2" FontSize="11" VerticalAlignment="Center"
                                             ToolTipService.ToolTip="Close"
                                             Visibility="{x:Bind conv:Show.If(IsClosable)}">
@@ -114,6 +172,10 @@
                     TabViewItem: TabView arranges its content at the content's own desired size
                     instead of filling the area it was given, which left short pages floating in a
                     fraction of the window.
+
+                    A strip is one row, so it cannot show sections the way the column does. Grouping is
+                    expressed here by ordering — the view model keeps a project's repositories adjacent
+                    — and by the colour stripe each tab carries.
                 -->
                 <TabView Grid.Row="0" x:Name="RepositoryTabs" VerticalAlignment="Top"
                          TabItemsSource="{x:Bind ViewModel.Tabs, Mode=OneWay}"
@@ -123,12 +185,20 @@
                          Visibility="{x:Bind ViewModel.TabStripVisibility, Mode=OneWay}">
                     <TabView.TabItemTemplate>
                         <DataTemplate x:DataType="vm:ShellTab">
-                            <TabViewItem Header="{x:Bind Title}"
-                                         IsClosable="{x:Bind IsClosable}"
+                            <TabViewItem IsClosable="{x:Bind IsClosable}"
                                          ToolTipService.ToolTip="{x:Bind Description}">
                                 <TabViewItem.IconSource>
                                     <FontIconSource Glyph="&#xE8B7;" />
                                 </TabViewItem.IconSource>
+                                <TabViewItem.Header>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Border Width="3" CornerRadius="2" Margin="0,3"
+                                                Background="{x:Bind Accent, Mode=OneWay}"
+                                                Visibility="{x:Bind GroupVisibility, Mode=OneWay}"
+                                                ToolTipService.ToolTip="{x:Bind GroupName, Mode=OneWay}" />
+                                        <TextBlock Text="{x:Bind Title}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </TabViewItem.Header>
                             </TabViewItem>
                         </DataTemplate>
                     </TabView.TabItemTemplate>

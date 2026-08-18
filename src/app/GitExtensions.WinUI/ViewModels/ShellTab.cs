@@ -1,3 +1,7 @@
+using GitExtensions.WinUI.Models;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
+
 namespace GitExtensions.WinUI.ViewModels;
 
 /// <summary>
@@ -9,6 +13,8 @@ namespace GitExtensions.WinUI.ViewModels;
 /// </remarks>
 public abstract class ShellTab : ObservableObject
 {
+    private RepositoryGroup? _group;
+
     /// <summary>Shown on the tab or row.</summary>
     public abstract string Title { get; }
 
@@ -23,6 +29,34 @@ public abstract class ShellTab : ObservableObject
     ///  the rest of the app's icons.
     /// </summary>
     public abstract bool IsHome { get; }
+
+    /// <summary>
+    ///  The project this tab belongs to, assigned by the shell when the grouping changes.
+    /// </summary>
+    /// <remarks>
+    ///  Held on the tab rather than looked up each time so a tab can show its project colour without
+    ///  every template needing a reference to the view model.
+    /// </remarks>
+    public RepositoryGroup? Group
+    {
+        get => _group;
+        set
+        {
+            if (SetProperty(ref _group, value))
+            {
+                OnPropertyChanged(nameof(Accent));
+                OnPropertyChanged(nameof(GroupVisibility));
+                OnPropertyChanged(nameof(GroupName));
+            }
+        }
+    }
+
+    public Brush Accent => Group?.Accent ?? GroupPalette.Accent("Slate");
+
+    /// <summary>The colour cue is only meaningful when the tab is actually in a project.</summary>
+    public Visibility GroupVisibility => Group is null ? Visibility.Collapsed : Visibility.Visible;
+
+    public string GroupName => Group?.Name ?? "";
 }
 
 /// <summary>
