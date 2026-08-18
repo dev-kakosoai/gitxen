@@ -27,6 +27,7 @@ public sealed class MainViewModel : ObservableObject
         GlobalGit = new GlobalGitSettings(_executorProvider);
 
         Tabs.Add(Home);
+        StripRows.Add(SidebarRow.ForHome());
         SelectedTab = Home;
     }
 
@@ -57,6 +58,17 @@ public sealed class MainViewModel : ObservableObject
     ///  different shapes of the same thing: the column shows sections, the strip is necessarily flat.
     /// </remarks>
     public ObservableCollection<ShellTabGroup> TabGroups { get; } = [];
+
+    /// <summary>
+    ///  The tab strip's entries: Home, then every repository Home lists, in project order.
+    /// </summary>
+    /// <remarks>
+    ///  The strip and the column are two presentations of the same list, so they carry the same rows.
+    ///  The strip cannot show sections — it is one row — so grouping is expressed by ordering and by
+    ///  the colour stripe each tab carries; repositories that are not open are simply tabs that open
+    ///  them when clicked.
+    /// </remarks>
+    public ObservableCollection<SidebarRow> StripRows { get; } = [];
 
     /// <summary>Recent repositories that are not in any group.</summary>
     public RepositoryGroup Ungrouped { get; } = new("Ungrouped", GroupIcons.Default, "Slate");
@@ -291,6 +303,9 @@ public sealed class MainViewModel : ObservableObject
     {
         RepositoryGroup group = new(name, glyph, colorKey);
         Groups.Add(group);
+
+        // Regrouped straight away so the repository column gains the new section too, not only Home.
+        Regroup();
         return group;
     }
 
@@ -326,6 +341,17 @@ public sealed class MainViewModel : ObservableObject
         }
 
         group.Name = name;
+
+        // The column's section headers are a projection that only updates when rebuilt.
+        Regroup();
+    }
+
+    /// <summary>Applies a new glyph and colour, and rebuilds the column so its headers pick them up.</summary>
+    public void RestyleGroup(RepositoryGroup group, string glyph, string colorKey)
+    {
+        group.Glyph = glyph;
+        group.ColorKey = colorKey;
+        RegroupTabs();
     }
 
     /// <summary>Moves a repository into a group, or out of every group when it is null.</summary>
@@ -381,15 +407,31 @@ public sealed class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    ///  Re-sections the open repositories and puts the tab strip in project order.
+    ///  Raised before the repository column and strip are rebuilt, so the window can ignore the
+    ///  selection-changed noise the rebuild causes in their lists.
+    /// </summary>
+    public event EventHandler? TabGroupsRebuilding;
+
+    /// <summary>
+    ///  Raised after the repository column's sections are rebuilt, so the window can re-assert which
+    ///  row is selected — rebuilding the list clears its selection.
+    /// </summary>
+    public event EventHandler? TabGroupsRebuilt;
+
+    /// <summary>
+    ///  Re-sections the repository column and puts the tab strip in project order.
     /// </summary>
     /// <remarks>
-    ///  The strip cannot show sections — it is one row of tabs — so grouping is expressed there by
-    ///  ordering, which keeps a project's repositories adjacent, and by the colour each tab carries.
-    ///  Home always leads, since it is the one tab that is not a repository.
+    ///  The column lists every repository Home lists, sectioned the same way, so the two views always
+    ///  agree — open ones are marked and the rest open on click. The strip cannot show sections — it
+    ///  is one row of tabs — so grouping is expressed there by ordering, which keeps a project's
+    ///  repositories adjacent, and by the colour each tab carries. Home always leads, since it is the
+    ///  one tab that is not a repository.
     /// </remarks>
     private void RegroupTabs()
     {
+        TabGroupsRebuilding?.Invoke(this, EventArgs.Empty);
+
         foreach (RepositoryTabViewModel tab in Repositories)
         {
             tab.Group = _groupByPath.TryGetValue(tab.WorkingDir, out string? name)
@@ -398,37 +440,84 @@ public sealed class MainViewModel : ObservableObject
         }
 
         TabGroups.Clear();
+        List<SidebarRow> allRows = [];
 
         foreach (RepositoryGroup group in Groups)
         {
-            ShellTabGroup section = new(group);
-
-            if (group.IsExpanded)
-            {
-                foreach (RepositoryTabViewModel tab in Repositories.Where(tab => ReferenceEquals(tab.Group, group)))
-                {
-                    section.Items.Add(tab);
-                }
-            }
+            List<SidebarRow> rows = BuildRows(group, group.Repositories);
+            allRows.AddRange(rows);
 
             // Empty projects are still listed: the header is the drop target that puts one back.
-            TabGroups.Add(section);
+            TabGroups.Add(BuildSection(group, rows));
         }
 
-        ShellTabGroup ungrouped = new(null);
+        List<SidebarRow> ungroupedRows = BuildRows(null, Ungrouped.Repositories);
+        allRows.AddRange(ungroupedRows);
+        ShellTabGroup ungrouped = BuildSection(null, ungroupedRows);
 
-        foreach (RepositoryTabViewModel tab in Repositories.Where(tab => tab.Group is null))
-        {
-            ungrouped.Items.Add(tab);
-        }
-
-        if (ungrouped.Items.Count > 0 || TabGroups.Count == 0)
+        if (ungrouped.Count > 0 || TabGroups.Count == 0)
         {
             TabGroups.Add(ungrouped);
         }
 
+        // The strip carries every row too — including those of collapsed projects, since collapsing
+        // is a statement about the column's space, not about the repositories.
+        StripRows.Clear();
+        StripRows.Add(SidebarRow.ForHome());
+
+        foreach (SidebarRow row in allRows)
+        {
+            StripRows.Add(row);
+        }
+
         ReorderTabs();
+        TabGroupsRebuilt?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>Builds the rows of one project: its repositories, open or not.</summary>
+    private List<SidebarRow> BuildRows(RepositoryGroup? group, IEnumerable<RecentRepository> entries)
+    {
+        List<SidebarRow> rows = [];
+
+        foreach (RecentRepository entry in entries)
+        {
+            rows.Add(new SidebarRow(entry, FindOpenTab(entry.Path), group));
+        }
+
+        // An open repository the recent list does not know yet — just opened, or since evicted —
+        // still needs a row, or the lists would deny something that is plainly open.
+        foreach (RepositoryTabViewModel tab in Repositories.Where(tab => ReferenceEquals(tab.Group, group)))
+        {
+            if (!rows.Any(row => string.Equals(row.Path, tab.WorkingDir, StringComparison.OrdinalIgnoreCase)))
+            {
+                rows.Add(new SidebarRow(new RecentRepository(tab.WorkingDir), tab, group));
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>Builds one section of the column from its project's rows.</summary>
+    private static ShellTabGroup BuildSection(RepositoryGroup? group, List<SidebarRow> rows)
+    {
+        ShellTabGroup section = new(group);
+
+        // The count is stated even while collapsed, when the section carries no items.
+        section.Count = rows.Count;
+
+        if (group?.IsExpanded != false)
+        {
+            foreach (SidebarRow row in rows)
+            {
+                section.Items.Add(row);
+            }
+        }
+
+        return section;
+    }
+
+    private RepositoryTabViewModel? FindOpenTab(string path) =>
+        Repositories.FirstOrDefault(tab => string.Equals(tab.WorkingDir, path, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Puts the strip in project order without disturbing the selection.</summary>
     private void ReorderTabs()
@@ -523,6 +612,9 @@ public sealed class MainViewModel : ObservableObject
         {
             RecentRepositories.Remove(entry);
         }
+
+        // The group cards hold the same entry; without redistributing they would keep showing it.
+        Regroup();
     }
 
     /// <summary>Moves a repository to the front of the recent list, capped at ten.</summary>
@@ -657,6 +749,10 @@ public sealed class MainViewModel : ObservableObject
 
         repository.Close();
         Tabs.Remove(repository);
+
+        // The column's sections are a projection of the open tabs; left alone they would keep the
+        // closed repository's row and count.
+        RegroupTabs();
 
         // Fall back to Home rather than to nothing, so the shell always has something selected.
         if (ReferenceEquals(SelectedTab, repository))

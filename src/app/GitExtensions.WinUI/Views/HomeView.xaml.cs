@@ -3,6 +3,7 @@ using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace GitExtensions.WinUI.Views;
@@ -75,7 +76,21 @@ public sealed partial class HomeView : UserControl
     {
         HomeView view = (HomeView)sender;
         view.SyncLayoutBox();
+
+        // Home hosts the global git configuration page with no repository, so it is handed the
+        // writer that exists without one.
+        if (view.ViewModel is MainViewModel viewModel)
+        {
+            view.GlobalConfig.GlobalGit = viewModel.GlobalGit;
+        }
     }
+
+    /// <summary>Populated on expand rather than on load, so Home never runs git it is not showing.</summary>
+    private async void AppSettings_Expanding(Expander sender, ExpanderExpandingEventArgs args) =>
+        await AppSettings.ActivateAsync();
+
+    private async void GlobalConfig_Expanding(Expander sender, ExpanderExpandingEventArgs args) =>
+        await GlobalConfig.ActivateAsync();
 
     private void SyncLayoutBox() =>
         LayoutBox.SelectedIndex = ViewModel?.Layout == RepositoryLayout.Sidebar ? 1 : 0;
@@ -174,11 +189,23 @@ public sealed partial class HomeView : UserControl
         Bindings.Update();
     }
 
-    private void ToggleGroup_Click(object sender, RoutedEventArgs e)
+    private void ToggleGroup_Click(object sender, RoutedEventArgs e) =>
+        ToggleGroup((sender as FrameworkElement)?.Tag as RepositoryGroup);
+
+    /// <summary>
+    ///  The whole header collapses its card, not only the chevron. Clicks on the buttons the header
+    ///  hosts do not reach here — they handle their own pointer events.
+    /// </summary>
+    private void GroupHeader_Tapped(object sender, TappedRoutedEventArgs e) =>
+        ToggleGroup((sender as FrameworkElement)?.Tag as RepositoryGroup);
+
+    private void ToggleGroup(RepositoryGroup? group)
     {
-        if ((sender as FrameworkElement)?.Tag is RepositoryGroup group)
+        if (group is not null && ViewModel is MainViewModel viewModel)
         {
-            group.IsExpanded = !group.IsExpanded;
+            // Through the view model, so the repository column's section collapses with the card —
+            // both read the same IsExpanded, but the column only reflects it when rebuilt.
+            viewModel.ToggleGroupExpanded(group);
         }
     }
 
@@ -219,8 +246,8 @@ public sealed partial class HomeView : UserControl
             viewModel.RenameGroup(group, name);
         }
 
-        group.Glyph = glyph;
-        group.ColorKey = colour;
+        // Restyling does too, so the repository column's header picks up the new look.
+        viewModel.RestyleGroup(group, glyph, colour);
         Bindings.Update();
     }
 

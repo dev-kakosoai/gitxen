@@ -99,7 +99,7 @@
                     -->
                     <ListView Grid.Row="2" x:Name="SidebarList"
                               ItemsSource="{Binding Source={StaticResource GroupedTabsSource}}"
-                              SelectedItem="{x:Bind ViewModel.SelectedTab, Mode=TwoWay}"
+                              SelectionChanged="SidebarList_SelectionChanged"
                               SelectionMode="Single" Padding="6,0,6,8"
                               ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
                         <ListView.GroupStyle>
@@ -109,7 +109,8 @@
                                         <Border Background="{x:Bind Tint, Mode=OneWay}" CornerRadius="5"
                                                 Padding="8,5" Margin="0,6,0,3"
                                                 AllowDrop="True" DragOver="SidebarGroup_DragOver"
-                                                Drop="SidebarGroup_Drop" Tag="{x:Bind}">
+                                                Drop="SidebarGroup_Drop" Tag="{x:Bind}"
+                                                Tapped="SidebarGroupHeader_Tapped">
                                             <Grid ColumnDefinitions="Auto,Auto,120,Auto" ColumnSpacing="8">
                                                 <Button Click="ToggleSidebarGroup_Click" Tag="{x:Bind}"
                                                         Style="{StaticResource IconButtonStyle}"
@@ -117,7 +118,12 @@
                                                         Visibility="{x:Bind ActionsVisibility}"
                                                         AutomationProperties.Name="Collapse or expand"
                                                         ToolTipService.ToolTip="Collapse or expand">
-                                                    <FontIcon Glyph="&#xE70D;" FontSize="{StaticResource IconSizeTiny}" />
+                                                    <FontIcon Glyph="&#xE70D;" FontSize="{StaticResource IconSizeTiny}"
+                                                              RenderTransformOrigin="0.5,0.5">
+                                                        <FontIcon.RenderTransform>
+                                                            <RotateTransform Angle="{x:Bind ChevronRotation, Mode=OneWay}" />
+                                                        </FontIcon.RenderTransform>
+                                                    </FontIcon>
                                                 </Button>
                                                 <FontIcon Grid.Column="1" Glyph="{x:Bind Glyph, Mode=OneWay}"
                                                           FontSize="{StaticResource IconSizeSmall}" VerticalAlignment="Center"
@@ -136,21 +142,22 @@
                             </GroupStyle>
                         </ListView.GroupStyle>
                         <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="vm:ShellTab">
+                            <DataTemplate x:DataType="vm:SidebarRow">
                                 <Grid ColumnDefinitions="Auto,Auto,140,Auto" ColumnSpacing="8" Padding="4,3"
                                       CanDrag="True" DragStarting="SidebarItem_DragStarting">
                                     <!-- The project's colour, so a row is placeable even when its
                                          section header has scrolled out of view. -->
                                     <Border Width="3" CornerRadius="2" Margin="0,2"
-                                            Background="{x:Bind Accent, Mode=OneWay}"
-                                            Visibility="{x:Bind GroupVisibility, Mode=OneWay}" />
+                                            Background="{x:Bind Accent}"
+                                            Visibility="{x:Bind GroupVisibility}" />
 
                                     <FontIcon Grid.Column="1" Glyph="&#xE8B7;" FontSize="{StaticResource IconSizeSmall}"
                                               VerticalAlignment="Center" />
 
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{x:Bind Description}" FontSize="{StaticResource FontSizeCaption}"
+                                        <TextBlock Text="{x:Bind Title}" FontWeight="{x:Bind TitleWeight}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind Path}" FontSize="{StaticResource FontSizeCaption}"
                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
@@ -158,7 +165,7 @@
                                     <Button Grid.Column="3" Click="CloseRepository_Click" Tag="{x:Bind}"
                                             Padding="6,2" FontSize="{StaticResource FontSizeCaption}" VerticalAlignment="Center"
                                             AutomationProperties.Name="Close tab" ToolTipService.ToolTip="Close"
-                                            Visibility="{x:Bind conv:Show.If(IsClosable)}">
+                                            Visibility="{x:Bind CloseVisibility}">
                                         <FontIcon Glyph="&#xE711;" FontSize="{StaticResource IconSizeTiny}" />
                                     </Button>
                                 </Grid>
@@ -181,25 +188,26 @@
                     — and by the colour stripe each tab carries.
                 -->
                 <TabView Grid.Row="0" x:Name="RepositoryTabs" VerticalAlignment="Top"
-                         TabItemsSource="{x:Bind ViewModel.Tabs, Mode=OneWay}"
-                         SelectedItem="{x:Bind ViewModel.SelectedTab, Mode=TwoWay}"
+                         TabItemsSource="{x:Bind ViewModel.StripRows, Mode=OneWay}"
+                         SelectionChanged="RepositoryTabs_SelectionChanged"
                          AddTabButtonClick="RepositoryTabs_AddTabButtonClick"
                          TabCloseRequested="RepositoryTabs_TabCloseRequested"
                          Visibility="{x:Bind ViewModel.TabStripVisibility, Mode=OneWay}">
                     <TabView.TabItemTemplate>
-                        <DataTemplate x:DataType="vm:ShellTab">
-                            <TabViewItem IsClosable="{x:Bind IsClosable}"
-                                         ToolTipService.ToolTip="{x:Bind Description}">
+                        <DataTemplate x:DataType="vm:SidebarRow">
+                            <TabViewItem IsClosable="{x:Bind IsOpen}"
+                                         ToolTipService.ToolTip="{x:Bind ToolTipText}">
                                 <TabViewItem.IconSource>
-                                    <FontIconSource Glyph="&#xE8B7;" />
+                                    <FontIconSource Glyph="{x:Bind Glyph}" />
                                 </TabViewItem.IconSource>
                                 <TabViewItem.Header>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <Border Width="3" CornerRadius="2" Margin="0,3"
-                                                Background="{x:Bind Accent, Mode=OneWay}"
-                                                Visibility="{x:Bind GroupVisibility, Mode=OneWay}"
-                                                ToolTipService.ToolTip="{x:Bind GroupName, Mode=OneWay}" />
-                                        <TextBlock Text="{x:Bind Title}" VerticalAlignment="Center" />
+                                                Background="{x:Bind Accent}"
+                                                Visibility="{x:Bind GroupVisibility}"
+                                                ToolTipService.ToolTip="{x:Bind GroupName}" />
+                                        <TextBlock Text="{x:Bind Title}" FontWeight="{x:Bind TitleWeight}"
+                                                   VerticalAlignment="Center" />
                                     </StackPanel>
                                 </TabViewItem.Header>
                             </TabViewItem>

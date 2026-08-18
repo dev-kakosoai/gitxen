@@ -24,13 +24,19 @@
                 <StackPanel Spacing="14">
                     <StackPanel Spacing="2">
                         <TextBlock Text="Identity" FontWeight="SemiBold" />
-                        <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                        <TextBlock x:Name="IdentityHint" Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
                                    Text="The name and address recorded on every commit you make. Leave the repository fields empty to use your global identity." />
                     </StackPanel>
 
-                    <Grid ColumnDefinitions="Auto,300,300" ColumnSpacing="16" RowSpacing="10"
+                    <Grid ColumnSpacing="16" RowSpacing="10"
                           RowDefinitions="Auto,Auto,Auto">
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="This repository"
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <!-- Named so the page can zero it when Home hosts it with no repository. -->
+                            <ColumnDefinition x:Name="LocalColumn" Width="300" />
+                            <ColumnDefinition Width="300" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="LocalHeader" Text="This repository"
                                    Style="{StaticResource ColumnHeaderStyle}" />
                         <TextBlock Grid.Row="0" Grid.Column="2" Text="All repositories"
                                    Style="{StaticResource ColumnHeaderStyle}" />
@@ -103,7 +109,7 @@
             </StackPanel>
 
             <!-- Everything else, read-only -->
-            <StackPanel Spacing="8">
+            <StackPanel Spacing="8" x:Name="RepositorySection">
                 <TextBlock Text="All settings for this repository" Style="{StaticResource SectionCaptionStyle}" />
                 <Border Style="{StaticResource CardBorderStyle}" Height="260">
                     <ListView ItemsSource="{x:Bind Tab.LocalConfig, Mode=OneWay}" SelectionMode="Single"

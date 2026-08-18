@@ -63,6 +63,21 @@ public sealed partial class MainWindow : Window
         // The grouped source is a resource, so it cannot be bound with x:Bind from the markup.
         ((CollectionViewSource)RootGrid.Resources["GroupedTabsSource"]).Source = ViewModel.TabGroups;
 
+        // The column's and the strip's highlights are driven from here rather than bound: rebuilding
+        // their lists clears their selections, and selecting a tab elsewhere has to be reflected too.
+        // While a rebuild runs, its selection-changed noise is ignored; the sync at the end resets it.
+        ViewModel.TabGroupsRebuilding += (_, _) => _syncingSidebarSelection = true;
+        ViewModel.TabGroupsRebuilt += (_, _) => SyncRepositorySelection();
+        ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.SelectedTab))
+            {
+                SyncRepositorySelection();
+            }
+        };
+
+        SyncRepositorySelection();
+
         // Takes over the backdrop, the root element's theme and the system caption buttons. The
         // palette itself is already registered; this is the part that needs a window to exist.
         ThemeService.Attach(this, RootGrid);
@@ -237,9 +252,80 @@ public sealed partial class MainWindow : Window
     // ---- Repository column -----------------------------------------------------------------------
 
     /// <summary>The repository being dragged between projects in the column.</summary>
-    private ShellTab? _draggingTab;
+    private SidebarRow? _draggingRow;
+
+    /// <summary>
+    ///  Suppresses the selection handler while the selection is being set from the view model, so a
+    ///  programmatic sync is not mistaken for a click.
+    /// </summary>
+    private bool _syncingSidebarSelection;
 
     private void SelectHome_Click(object sender, RoutedEventArgs e) => ViewModel.SelectedTab = ViewModel.Home;
+
+    /// <summary>
+    ///  A click in the column: switch to the repository when it is open, open it when it is not.
+    /// </summary>
+    /// <remarks>
+    ///  Selection is driven from code rather than a two-way binding: the rows are not the tabs, and
+    ///  rebuilding the sections clears the list's selection — a binding would write that clearance
+    ///  into <see cref="MainViewModel.SelectedTab"/> and bounce the shell back to Home.
+    /// </remarks>
+    private async void SidebarList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_syncingSidebarSelection && SidebarList.SelectedItem is SidebarRow row)
+        {
+            await SelectRowAsync(row);
+        }
+    }
+
+    /// <summary>A click in the strip: Home, an open repository, or one to open. Same as the column.</summary>
+    private async void RepositoryTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_syncingSidebarSelection && RepositoryTabs.SelectedItem is SidebarRow row)
+        {
+            await SelectRowAsync(row);
+        }
+    }
+
+    private async Task SelectRowAsync(SidebarRow row)
+    {
+        if (row.IsHome)
+        {
+            ViewModel.SelectedTab = ViewModel.Home;
+            return;
+        }
+
+        if (row.OpenTab is RepositoryTabViewModel tab)
+        {
+            ViewModel.SelectedTab = tab;
+            return;
+        }
+
+        await OpenRecentAsync(row.Path);
+
+        // On success the rebuild has already re-selected the new tab's row; on failure this puts the
+        // highlight back where it belongs instead of leaving it on a repository that did not open.
+        SyncRepositorySelection();
+    }
+
+    /// <summary>Points the column's and the strip's highlights at the selected tab's row, if any.</summary>
+    private void SyncRepositorySelection()
+    {
+        _syncingSidebarSelection = true;
+
+        ShellTab? selected = ViewModel.SelectedTab;
+
+        SidebarList.SelectedItem = selected is RepositoryTabViewModel
+            ? ViewModel.TabGroups
+                .SelectMany(section => section.Items)
+                .FirstOrDefault(row => ReferenceEquals(row.OpenTab, selected))
+            : null;
+
+        RepositoryTabs.SelectedItem = ViewModel.StripRows.FirstOrDefault(row =>
+            selected is HomeTabViewModel ? row.IsHome : ReferenceEquals(row.OpenTab, selected));
+
+        _syncingSidebarSelection = false;
+    }
 
     private void ToggleSidebarGroup_Click(object sender, RoutedEventArgs e)
     {
@@ -249,18 +335,30 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    ///  The whole header collapses its section, not only the chevron. Clicks on the buttons the header
+    ///  hosts do not reach here — they handle their own pointer events.
+    /// </summary>
+    private void SidebarGroupHeader_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is ShellTabGroup { Group: RepositoryGroup group })
+        {
+            ViewModel.ToggleGroupExpanded(group);
+        }
+    }
+
     private void SidebarItem_DragStarting(UIElement sender, DragStartingEventArgs args)
     {
-        _draggingTab = (sender as FrameworkElement)?.DataContext as ShellTab;
+        _draggingRow = (sender as FrameworkElement)?.DataContext as SidebarRow;
 
         // Something has to be offered or the drop targets never light up.
-        args.Data.SetText(_draggingTab?.Description ?? "");
+        args.Data.SetText(_draggingRow?.Path ?? "");
         args.Data.RequestedOperation = DataPackageOperation.Move;
     }
 
     private void SidebarGroup_DragOver(object sender, DragEventArgs e)
     {
-        e.AcceptedOperation = _draggingTab is null ? DataPackageOperation.None : DataPackageOperation.Move;
+        e.AcceptedOperation = _draggingRow is null ? DataPackageOperation.None : DataPackageOperation.Move;
         e.DragUIOverride.Caption = "Move to this project";
         e.DragUIOverride.IsGlyphVisible = false;
     }
@@ -275,18 +373,18 @@ public sealed partial class MainWindow : Window
     private void SidebarGroup_Drop(object sender, DragEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not ShellTabGroup section
-            || _draggingTab is not RepositoryTabViewModel repository)
+            || _draggingRow is not SidebarRow row)
         {
             return;
         }
 
-        _draggingTab = null;
-        ViewModel.AssignToGroup(repository.WorkingDir, section.Group);
+        _draggingRow = null;
+        ViewModel.AssignToGroup(row.Path, section.Group);
     }
 
     private void CloseRepository_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: ShellTab tab })
+        if (sender is Button { Tag: SidebarRow { OpenTab: RepositoryTabViewModel tab } })
         {
             ViewModel.CloseTab(tab);
         }
@@ -401,7 +499,7 @@ public sealed partial class MainWindow : Window
 
     private void RepositoryTabs_TabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
     {
-        if (args.Item is RepositoryTabViewModel tab)
+        if (args.Item is SidebarRow { OpenTab: RepositoryTabViewModel tab })
         {
             ViewModel.CloseTab(tab);
         }

@@ -23,7 +23,7 @@ public sealed class ShellTabGroup : ObservableObject
     /// <summary>The project, or null for the repositories that are in none.</summary>
     public RepositoryGroup? Group { get; }
 
-    public ObservableCollection<ShellTab> Items { get; } = [];
+    public ObservableCollection<SidebarRow> Items { get; } = [];
 
     public string Name => Group?.Name ?? "Not in a project";
 
@@ -33,7 +33,11 @@ public sealed class ShellTabGroup : ObservableObject
 
     public Brush Tint => Group?.Tint ?? GroupPalette.Tint("Slate");
 
-    public int Count => Items.Count;
+    /// <summary>
+    ///  How many open repositories the project has. Held separately from <see cref="Items"/> because a
+    ///  collapsed section carries no items, and its header still has to state the real number.
+    /// </summary>
+    public int Count { get; internal set; }
 
     /// <summary>The count as text, shown as a plain dim number rather than a badge.</summary>
     public string CountText => Count.ToString(System.Globalization.CultureInfo.CurrentCulture);

@@ -65,11 +65,14 @@ public sealed class RepositoryGroup : ObservableObject
             if (SetProperty(ref _isExpanded, value))
             {
                 OnPropertyChanged(nameof(ContentVisibility));
+                OnPropertyChanged(nameof(ChevronRotation));
             }
         }
     }
 
     public Visibility ContentVisibility => IsExpanded ? Visibility.Visible : Visibility.Collapsed;
+
+    public double ChevronRotation => IsExpanded ? 0 : -90;
 
     public ObservableCollection<RecentRepository> Repositories { get; } = [];
 
