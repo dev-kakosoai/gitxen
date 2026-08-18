@@ -28,7 +28,31 @@ public sealed class SessionState
 
     public int AutoFetchMinutes { get; set; } = 10;
 
+    /// <summary>Repository groups, in display order.</summary>
+    public List<SavedGroup> Groups { get; set; } = [];
+
     public WindowBounds? Window { get; set; }
+}
+
+/// <summary>
+///  A repository group as it is stored.
+/// </summary>
+/// <remarks>
+///  Repositories are recorded as paths rather than as objects: the group is a statement about which
+///  working directories belong together, and it should survive one of them being closed, reopened or
+///  temporarily unavailable.
+/// </remarks>
+public sealed class SavedGroup
+{
+    public string Name { get; set; } = "";
+
+    public string Glyph { get; set; } = "";
+
+    public string ColorKey { get; set; } = "";
+
+    public bool IsExpanded { get; set; } = true;
+
+    public List<string> Repositories { get; set; } = [];
 }
 
 public sealed class WindowBounds

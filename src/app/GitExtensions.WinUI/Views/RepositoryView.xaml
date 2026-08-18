@@ -227,6 +227,17 @@
                         </DropDownButton.Flyout>
                     </DropDownButton>
 
+                    <!-- Populated from what is actually installed; see ExternalTools. -->
+                    <DropDownButton ToolTipService.ToolTip="Open this repository in another application">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8A7;" FontSize="12" />
+                            <TextBlock Text="Open in" />
+                        </StackPanel>
+                        <DropDownButton.Flyout>
+                            <MenuFlyout x:Name="ExternalToolsFlyout" Placement="Bottom" />
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+
                     <Button Click="Palette_Click" ToolTipService.ToolTip="Command palette (Ctrl+Shift+P)">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE721;" FontSize="12" />

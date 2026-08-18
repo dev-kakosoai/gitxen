@@ -34,6 +34,14 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<ShellTab> Tabs { get; } = [];
 
+    /// <summary>
+    ///  Repository groups, in display order. A repository belongs to at most one.
+    /// </summary>
+    public ObservableCollection<RepositoryGroup> Groups { get; } = [];
+
+    /// <summary>Recent repositories that are not in any group.</summary>
+    public RepositoryGroup Ungrouped { get; } = new("Ungrouped", GroupIcons.Default, "Slate");
+
     /// <summary>Recent repositories with their current branch, shown on the Home page.</summary>
     public ObservableCollection<RecentRepository> RecentRepositories { get; } = [];
 
@@ -205,6 +213,10 @@ public sealed class MainViewModel : ObservableObject
             RecentRepositories.Add(new RecentRepository(path));
         }
 
+        // Sort them into their groups before the per-repository detail is read, so the page can
+        // draw the structure immediately and fill in branches as they arrive.
+        Regroup();
+
         foreach (RecentRepository entry in RecentRepositories)
         {
             if (!IsValidRepository(entry.Path))
@@ -232,6 +244,153 @@ public sealed class MainViewModel : ObservableObject
             }
         }
     }
+
+    // ---- Groups ----------------------------------------------------------------------------------
+    // Membership is stored as paths, so a group survives its repositories being closed or temporarily
+    // unavailable. The RecentRepository objects are rebuilt on every refresh and sorted into the
+    // groups from that stored membership.
+
+    /// <summary>Which group each repository path belongs to; the authority for membership.</summary>
+    private readonly Dictionary<string, string> _groupByPath = new(StringComparer.OrdinalIgnoreCase);
+
+    public RepositoryGroup CreateGroup(string name, string glyph, string colorKey)
+    {
+        RepositoryGroup group = new(name, glyph, colorKey);
+        Groups.Add(group);
+        return group;
+    }
+
+    /// <summary>
+    ///  Removes a group. Its repositories are not touched — they simply become ungrouped, since the
+    ///  group was only ever a statement about how they are organised.
+    /// </summary>
+    public void DeleteGroup(RepositoryGroup group)
+    {
+        foreach (string path in _groupByPath
+            .Where(pair => string.Equals(pair.Value, group.Name, StringComparison.OrdinalIgnoreCase))
+            .Select(pair => pair.Key)
+            .ToList())
+        {
+            _groupByPath.Remove(path);
+        }
+
+        Groups.Remove(group);
+        Regroup();
+    }
+
+    /// <summary>Renames a group, keeping the membership that is keyed by its name.</summary>
+    public void RenameGroup(RepositoryGroup group, string name)
+    {
+        string previous = group.Name;
+
+        foreach (string path in _groupByPath
+            .Where(pair => string.Equals(pair.Value, previous, StringComparison.OrdinalIgnoreCase))
+            .Select(pair => pair.Key)
+            .ToList())
+        {
+            _groupByPath[path] = name;
+        }
+
+        group.Name = name;
+    }
+
+    /// <summary>Moves a repository into a group, or out of every group when it is null.</summary>
+    public void AssignToGroup(string path, RepositoryGroup? group)
+    {
+        if (group is null)
+        {
+            _groupByPath.Remove(path);
+        }
+        else
+        {
+            _groupByPath[path] = group.Name;
+        }
+
+        Regroup();
+    }
+
+    /// <summary>
+    ///  Redistributes the recent repositories into their groups.
+    /// </summary>
+    /// <remarks>
+    ///  Rebuilt wholesale rather than moved item by item: the recent list is small, and reconstructing
+    ///  it keeps the groups consistent with the stored membership no matter how it was reached —
+    ///  a drag, a rename, or a repository appearing for the first time.
+    /// </remarks>
+    private void Regroup()
+    {
+        foreach (RepositoryGroup group in Groups)
+        {
+            group.Repositories.Clear();
+        }
+
+        Ungrouped.Repositories.Clear();
+
+        foreach (RecentRepository entry in RecentRepositories)
+        {
+            RepositoryGroup? target = _groupByPath.TryGetValue(entry.Path, out string? name)
+                ? Groups.FirstOrDefault(group => string.Equals(group.Name, name, StringComparison.OrdinalIgnoreCase))
+                : null;
+
+            (target ?? Ungrouped).Repositories.Add(entry);
+        }
+
+        foreach (RepositoryGroup group in Groups)
+        {
+            group.RaiseCountChanged();
+        }
+
+        Ungrouped.RaiseCountChanged();
+        OnPropertyChanged(nameof(HasGroups));
+        OnPropertyChanged(nameof(UngroupedVisibility));
+    }
+
+    public bool HasGroups => Groups.Count > 0;
+
+    /// <summary>
+    ///  The ungrouped list is only worth a heading once there is something to contrast it with.
+    /// </summary>
+    public Visibility UngroupedVisibility =>
+        Ungrouped.Repositories.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    private void RestoreGroups(IEnumerable<SavedGroup> saved)
+    {
+        Groups.Clear();
+        _groupByPath.Clear();
+
+        foreach (SavedGroup stored in saved)
+        {
+            RepositoryGroup group = new(
+                stored.Name,
+                stored.Glyph.Length > 0 ? stored.Glyph : GroupIcons.Default,
+                stored.ColorKey.Length > 0 ? stored.ColorKey : GroupPalette.Default)
+            {
+                IsExpanded = stored.IsExpanded
+            };
+
+            Groups.Add(group);
+
+            foreach (string path in stored.Repositories)
+            {
+                _groupByPath[path] = group.Name;
+            }
+        }
+    }
+
+    private List<SavedGroup> CaptureGroups() =>
+    [
+        .. Groups.Select(group => new SavedGroup
+        {
+            Name = group.Name,
+            Glyph = group.Glyph,
+            ColorKey = group.ColorKey,
+            IsExpanded = group.IsExpanded,
+            Repositories = _groupByPath
+                .Where(pair => string.Equals(pair.Value, group.Name, StringComparison.OrdinalIgnoreCase))
+                .Select(pair => pair.Key)
+                .ToList()
+        })
+    ];
 
     /// <summary>Drops a repository from the recent list without touching anything on disk.</summary>
     public void RemoveRecent(string path)
@@ -293,6 +452,8 @@ public sealed class MainViewModel : ObservableObject
     {
         Mode = state.Mode == UiMode.Zen ? UiMode.Simple : state.Mode;
 
+        RestoreGroups(state.Groups);
+
         foreach (string recent in state.Recent)
         {
             Recent.Add(recent);
@@ -325,6 +486,7 @@ public sealed class MainViewModel : ObservableObject
             Repositories = opened.Select(tab => tab.WorkingDir).ToList(),
             SelectedIndex = SelectedRepository is null ? -1 : opened.IndexOf(SelectedRepository),
             Recent = Recent.ToList(),
+            Groups = CaptureGroups(),
             Window = window
         };
     }

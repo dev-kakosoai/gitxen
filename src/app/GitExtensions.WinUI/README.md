@@ -92,23 +92,28 @@ the Changes page lays out normally.
 
 ## What is implemented
 
-Open / clone / init, multiple repositories as tabs, recent list, drag-and-drop.
+Open / clone / init, multiple repositories as tabs or a left-hand column, and a Home tab that is
+always first: recent repositories with their current branch and last commit, organised into projects
+you can create, colour, give an icon, collapse, and drag repositories in and out of. Group membership
+is stored as paths, so a group survives its repositories being closed or temporarily unavailable.
 
 Changes: staged and unstaged lists, stage/unstage per file and for all, **hunk-level staging**,
 discard, commit, amend, sign-off. History: graph lanes, ref badges, current-branch or all-branches
 scope, client-side filter plus a real `git log` search (message, author, content via `-S`, path),
 commit details, per-commit context menu (cherry-pick, revert, rebase, reset, bisect, branch, tag,
-checkout, copy). Reflog with recovery actions. Branches (local and remote), Remotes, Tags, Stashes,
+checkout, copy). Reflog with recovery actions. Conflict resolution: a side per file, a merge tool, or resolve by hand
+and mark it done. Paused merges, rebases and cherry-picks are detected and shown as a banner with
+their own continue/skip/abort. Branches (local and remote), Remotes, Tags, Stashes,
 Submodules, Worktrees, Maintenance, Settings. Fetch / pull / push with options, and continue/abort for
 a paused merge, rebase, cherry-pick or revert.
 
 ## What is not
 
-Conflict resolution beyond listing the conflicted files, interactive rebase, comparing two arbitrary
-commits, real Blame and File-history views (both are raw text in a dialog), a file tree, format-patch
-and apply-patch, sparse checkout, submodule add/remove, GPG, LFS, the plugin host, localization (this
-front-end is English-only and not wired to `ResourceManager`), the full settings tree, credential
-handling, and crash reporting.
+Interactive rebase, real Blame and File-history views (both are raw text in a dialog), a file tree,
+word-level diff highlighting, drag-and-drop on the commit graph, format-patch and apply-patch,
+sparse checkout, submodule add/remove, GPG, LFS, the plugin host, localization (this front-end is
+English-only and not wired to ResourceManager), the full settings tree, credential handling, and
+crash reporting.
 
 **There are no tests.** `HunkSplitter` is the most valuable thing to cover — it is pure
 string-in/string-out and it builds patches that are applied to the index. The obstacle is that it

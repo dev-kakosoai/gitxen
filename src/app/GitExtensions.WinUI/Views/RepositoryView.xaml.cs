@@ -35,7 +35,14 @@ public sealed partial class RepositoryView : UserControl
     }
 
     private static void OnTabPropertyChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args) =>
-        ((RepositoryView)sender).RefreshBranchMenu();
+        ((RepositoryView)sender).OnTabAssigned();
+
+    /// <summary>Rebuilds the menus that depend on the repository or the machine.</summary>
+    private void OnTabAssigned()
+    {
+        RefreshBranchMenu();
+        RefreshExternalTools();
+    }
 
     /// <summary>The section pages, keyed by the Tag on their navigation item.</summary>
     private IReadOnlyDictionary<string, RepositoryPage> Pages => new Dictionary<string, RepositoryPage>
@@ -86,6 +93,59 @@ public sealed partial class RepositoryView : UserControl
             string target = branch;
             item.Click += (_, _) => _ = CheckoutAsync(target);
             BranchFlyout.Items.Add(item);
+        }
+    }
+
+    /// <summary>
+    ///  Rebuilds the Open in menu from the tools that are installed.
+    /// </summary>
+    /// <remarks>
+    ///  Built in code rather than declared in XAML because the list depends on what is on the machine:
+    ///  offering Visual Studio Code to someone who does not have it only produces a failure on click.
+    /// </remarks>
+    private void RefreshExternalTools()
+    {
+        ExternalToolsFlyout.Items.Clear();
+
+        IReadOnlyList<ExternalTool> tools = ExternalTools.Available;
+
+        if (tools.Count == 0)
+        {
+            ExternalToolsFlyout.Items.Add(new MenuFlyoutItem
+            {
+                Text = "Nothing found on your PATH",
+                IsEnabled = false
+            });
+
+            return;
+        }
+
+        foreach (ExternalTool tool in tools)
+        {
+            MenuFlyoutItem item = new()
+            {
+                Text = tool.Name,
+                Icon = new FontIcon { Glyph = tool.Glyph }
+            };
+
+            ExternalTool target = tool;
+            item.Click += (_, _) => OpenIn(target);
+            ExternalToolsFlyout.Items.Add(item);
+        }
+    }
+
+    private void OpenIn(ExternalTool tool)
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        string error = ExternalTools.Launch(tool, tab.WorkingDir);
+
+        if (error.Length > 0)
+        {
+            tab.ReportInformation($"Could not open {tool.Name}", error);
         }
     }
 
@@ -222,6 +282,16 @@ public sealed partial class RepositoryView : UserControl
             commands.Add(new PaletteCommand("Open pull requests", "Host", "",
                 () => OpenHostAsync(_ => host.PullRequestsUrl)));
             commands.Add(new PaletteCommand("Open issues", "Host", "", () => OpenHostAsync(_ => host.IssuesUrl)));
+        }
+
+        foreach (ExternalTool tool in ExternalTools.Available)
+        {
+            ExternalTool target = tool;
+            commands.Add(new PaletteCommand($"Open in {tool.Name}", "Open with", "", () =>
+            {
+                OpenIn(target);
+                return Task.CompletedTask;
+            }));
         }
 
         foreach (string branch in tab.Branches.Where(branch => branch != tab.Branch))
