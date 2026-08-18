@@ -1,154 +1,82 @@
-![Git Extensions logo](https://cdn.rawgit.com/gitextensions/gitextensions/master/setup/assets/Logo/git-extensions-logo.svg)
+# Gitxen
 
-# Git Extensions
+Gitxen is a free, open-source git client for Windows, built with WinUI 3.
 
-Git Extensions is a standalone Windows UI tool for managing git repositories.
-It also integrates with Windows Explorer and Microsoft Visual Studio.
+It shows staged and unstaged changes with hunk-level staging, a commit graph with ref badges and
+live search, branches, remotes, tags, stashes, submodules, worktrees, reflog recovery and conflict
+resolution — with several repositories open at once as tabs.
 
-## Online manual
+Gitxen is a **derivative work of [Git Extensions](https://github.com/gitextensions/gitextensions)**
+and is distributed under the same licence, **GPL-3.0** — see [Licence and credits](#licence-and-credits)
+below.
 
-[git-extensions-documentation.readthedocs.org](https://git-extensions-documentation.readthedocs.org/)
+## Status
 
-## Current Status
+Gitxen is in early development (current version: 0.1.0). The WinUI 3 front-end lives in
+[src/app/GitExtensions.WinUI/](src/app/GitExtensions.WinUI/) and is built on the unmodified
+Git Extensions engine; the original WinForms application also still builds and runs from this
+repository, unchanged.
 
-<a href="#backers" alt="sponsors on Open Collective"><img src="https://opencollective.com/gitextensions/backers/badge.svg" /></a> <a href="#sponsors" alt="Sponsors on Open Collective"><img src="https://opencollective.com/gitextensions/sponsors/badge.svg" /></a>
+## Install
 
-### Next Version ([build instructions](https://github.com/gitextensions/gitextensions/wiki/Build-instructions))
+Requires Windows 10 (1809) or later, x64. Packages are self-contained — no separate .NET or
+Windows App SDK install is needed.
 
-<table>
-  <tr>
-    <th>&nbsp;</th>
-    <th>Windows only</th>
-  </tr>
-  <tr>
-    <td>
-      Runtime environment
-    </td>
-    <td>
-      MS Windows 10+ // <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target=_blank>.NET Desktop 10.0 SDK</a>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      Development
-    </td>
-    <td>
-      MS Visual Studio 2026, C# 14 // VC++ (inc. ATL for x86/x64 for installer)
-    </td>
-  </tr>
-  <tr>
-    <td>
-      Current dev status
-    </td>
-    <td>
-      <a href="https://github.com/gitextensions/gitextensions/actions/workflows/pr-build.yml?query=branch%3Amaster"><img alt="Build status" src="https://github.com/gitextensions/gitextensions/actions/workflows/pr-build.yml/badge.svg?branch=master" style="max-width:100%;"></a>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      Translations
-    </td>
-    <td>
-      <a target="_blank" style="text-decoration:none; color:black; font-size:66%" href="https://github.com/gitextensions/gitextensions/wiki/Translations" title="More information in the wiki"><img src="https://img.shields.io/badge/tranlations-Transifex-blue" ></a>
-    </td>
-  </tr>
-</table>
+* **Installer (MSI)** or **portable zip**: download from the
+  [releases page](https://github.com/dev-kakosoai/gitxen/releases).
+* **PowerShell one-liner** (per-user, no admin, verifies checksums):
 
-## Downloads
+  ```powershell
+  irm https://raw.githubusercontent.com/dev-kakosoai/gitxen/master/setup/gitxen/install.ps1 | iex
+  ```
 
-<a href="https://github.com/gitextensions/gitextensions/releases" rel="nofollow" style="vertical-align: -webkit-baseline-middle;"><img src="https://img.shields.io/github/downloads/gitextensions/gitextensions/total.svg?label=GitHub%20downloads%20(total)&cacheSeconds=86400"></a> <a href="https://chocolatey.org/packages/gitextensions" rel="nofollow" style="vertical-align: -webkit-baseline-middle;"><img src="https://img.shields.io/chocolatey/dt/gitextensions.svg?label=Chocolatey%20downloads%20(total)&cacheSeconds=86400"></a>
+* **Package managers**, as the channels come online: winget (`Kakoso.Gitxen`),
+  Chocolatey (`gitxen`), Scoop (`gitxen`).
 
-**[Download it now](https://github.com/gitextensions/gitextensions/releases/latest)** or install it with [Chocolatey](https://chocolatey.org/packages/gitextensions) or [Winget](https://winget.run/pkg/GitExtensionsTeam/GitExtensions).
+Every channel puts `gitxen` on `PATH` and adds a Start menu entry. Packaging details live in
+[setup/gitxen/](setup/gitxen/README.md).
 
-If you want to **update a portable version**, you should delete all the files and the subfolders from the existing folder except:
+## Building from source
 
-* _GitExtensions.settings_
-* _WindowPositions.xml_
-* User defined themes in folder _Themes_
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (pinned in
+`global.json`), a Windows SDK install, and Visual Studio 2026 for the full solution. After cloning:
 
-<table>
-  <tr>
-    <td>
-      <strong>Latest official release: v7.2.0</strong>
-    </td>
-    <td>
-      <a href="https://github.com/gitextensions/gitextensions/releases/latest">[ Download ]</a><br />
-      <a href="https://github.com/gitextensions/gitextensions/releases/latest" rel="nofollow" style="vertical-align: -webkit-baseline-middle;"><img src="https://img.shields.io/github/downloads/gitextensions/gitextensions/latest/total.svg?label=GitHub%20downloads%20(latest)&cacheSeconds=3600"></a>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <strong>Current dev stream</strong><br />
-      NB: expect :unicorn: :unicorn: and :dragon: :dragon:
-    </td>
-    <td>
-      <a href="https://github.com/gitextensions/gitextensions/actions/workflows/pr-build.yml?query=branch%3Amaster">[ Download ]</a><br />
-      <a href="https://github.com/gitextensions/gitextensions/actions/workflows/pr-build.yml?query=branch%3Amaster"><img alt="Build status" src="https://github.com/gitextensions/gitextensions/actions/workflows/pr-build.yml/badge.svg?branch=master" style="max-width:100%;"></a>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <strong>Visual Studio VSIX (2022 and later)</strong>
-    </td>
-    <td>
-      <a href="https://marketplace.visualstudio.com/items?itemName=GitExtensionsApp.VS2022">[ Download ]</a> or install from Visual Studio via Extensions
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <strong>Visual Studio Code VSIX</strong><br />
-      Kudos to <a href="https://github.com/pmiossec" class="author text-inherit">@pmiossec</a>
-    </td>
-    <td>
-      <a href="https://marketplace.visualstudio.com/items?itemName=pmiossec.vscode-gitextensions">[ Download ]</a> or install via VSCode<br />
-      NB: Please direct all discussions about the VSIX to <a href="https://github.com/pmiossec/vscode-gitextensions">its own repo</a>.
-    </td>
-  </tr>
-</table>
+```
+git submodule update --init --recursive
+dotnet build Gitxen.slnf
+dotnet build src/app/GitExtensions.WinUI/GitExtensions.WinUI.csproj -c Debug -p:Platform=x64
+```
 
-# Conduct
+`Gitxen.slnf` scopes the build to the app and its backend dependencies; a bare `dotnet build` builds
+the entire solution, including the WinForms application. See the
+[Gitxen README](src/app/GitExtensions.WinUI/README.md) for the project layout and conventions.
 
-Project maintainers pledge to foster an open and welcoming environment, and ask contributors to do the same.
+## Licence and credits
 
-For more information see our [code of conduct](CODE_OF_CONDUCT.md).
+Gitxen is licensed under the **GNU General Public License v3.0** — see [LICENSE.md](LICENSE.md).
 
-# Shoutouts
+It is a derivative work of **[Git Extensions](https://github.com/gitextensions/gitextensions)**.
+Copyright in the original work remains with the Git Extensions authors and contributors;
+[NOTICE.md](NOTICE.md) records the derivation and what was changed, as GPL-3.0 requires. Gitxen is
+named differently precisely so that it is not mistaken for the upstream project, and is **not
+endorsed by or affiliated with** the Git Extensions project.
 
-* We thank all the people who contribute, the project exists because of you<br />
-  <a href="https://github.com/gitextensions/gitextensions/contributors"><img src="https://opencollective.com/gitextensions/contributors.svg?width=890&button=false" /></a>
-* We thank [Transifex](https://www.transifex.com/) for helping us with translations<br />
-  <a href="https://www.transifex.com/" target="_blank"><img src="./src/app/GitUI/Resources/Icons/originals/transifex.svg"></a>
-* We thank [SignPath.io](https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=gitextension) for the free code signing<br />
-  <a href="https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=gitextension" target="_blank"><img src="./src/app/GitUI/Resources/Icons/originals/signpath_logo.png"></a>
-* We thank [SignPath Foundation](https://signpath.org/?utm_source=foundation&utm_medium=github&utm_campaign=gitextension) for the signing certificate
-* We thank [Yusuke Kamiyamane](http://p.yusukekamiyamane.com/) for the icons ([CCA/3.0](http://creativecommons.org/licenses/by/3.0/))
+With thanks to:
 
-## Backers
+* The **Git Extensions team and contributors**, whose engine and years of work this project is built
+  on. If you find Gitxen useful, consider [supporting Git Extensions on Open
+  Collective](https://opencollective.com/gitextensions).
+* [Yusuke Kamiyamane](http://p.yusukekamiyamane.com/) for icons used in the codebase
+  ([CC BY 3.0](http://creativecommons.org/licenses/by/3.0/)).
 
-Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/gitextensions#backer)]
+## Conduct
 
-<a href="https://opencollective.com/gitextensions#backers" target="_blank"><img src="https://opencollective.com/gitextensions/backers.svg?width=890"></a>
+Project maintainers pledge to foster an open and welcoming environment, and ask contributors to do
+the same. For more information see the [code of conduct](CODE_OF_CONDUCT.md).
 
-## Sponsors
+## Links
 
-Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [[Become a sponsor](https://opencollective.com/gitextensions#sponsor)]
-
-<a href="https://opencollective.com/gitextensions/sponsor/0/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/0/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/1/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/1/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/2/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/2/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/3/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/3/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/4/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/4/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/5/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/5/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/6/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/6/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/7/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/7/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/8/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/8/avatar.svg"></a>
-<a href="https://opencollective.com/gitextensions/sponsor/9/website" target="_blank"><img src="https://opencollective.com/gitextensions/sponsor/9/avatar.svg"></a>
-
-# Useful Links
-
-* Website: [gitextensions.github.io](https://gitextensions.github.io/) [Git repo](https://github.com/gitextensions/gitextensions.github.io)
-* Source code: [github.com/gitextensions/gitextensions](https://github.com/gitextensions/gitextensions)
-* Online manual: [git-extensions-documentation.readthedocs.org](https://git-extensions-documentation.readthedocs.org/) [Git repo](https://github.com/gitextensions/GitExtensionsDoc)
-* Issue tracker: [github.com/gitextensions/gitextensions/issues](https://github.com/gitextensions/gitextensions/issues)
-* Wiki: [github.com/gitextensions/gitextensions/wiki](https://github.com/gitextensions/gitextensions/wiki)
-* Gitter chat: [gitter.im/gitextensions/gitextensions](https://gitter.im/gitextensions/gitextensions?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+* Source code: [github.com/dev-kakosoai/gitxen](https://github.com/dev-kakosoai/gitxen)
+* Issue tracker: [github.com/dev-kakosoai/gitxen/issues](https://github.com/dev-kakosoai/gitxen/issues)
+* Upstream project: [gitextensions.github.io](https://gitextensions.github.io/) ·
+  [online manual](https://git-extensions-documentation.readthedocs.org/)
