@@ -86,6 +86,9 @@ public sealed partial class HomeView : UserControl
     private void Clone_Click(object sender, RoutedEventArgs e) =>
         ActionRequested?.Invoke(this, HomeAction.Clone);
 
+    private void Setup_Click(object sender, RoutedEventArgs e) =>
+        ActionRequested?.Invoke(this, HomeAction.RunSetup);
+
     private void Init_Click(object sender, RoutedEventArgs e) =>
         ActionRequested?.Invoke(this, HomeAction.Initialise);
 
@@ -372,5 +375,8 @@ public enum HomeAction
 {
     OpenRepository,
     Clone,
-    Initialise
+    Initialise,
+
+    /// <summary>Reopen the setup wizard, which is also how a folder is scanned for repositories.</summary>
+    RunSetup
 }

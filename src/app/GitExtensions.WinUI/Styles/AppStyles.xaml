@@ -91,6 +91,19 @@
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
 
+    <!--
+        A button that is only its glyph: no fill and no border at rest, so a row of them reads as
+        icons rather than as a toolbar. The Background setter only governs the rest state, because a
+        control template's visual states outrank a style's setters, so hover and pressed still light
+        up normally.
+    -->
+    <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="6,3" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+    </Style>
+
     <!-- Empty-state block: a glyph, a headline and a sentence, centred in the space it fills. -->
     <Style x:Key="EmptyStateGlyphStyle" TargetType="FontIcon">
         <Setter Property="FontSize" Value="40" />

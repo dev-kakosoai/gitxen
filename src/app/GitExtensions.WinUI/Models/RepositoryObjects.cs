@@ -1,3 +1,4 @@
+using GitExtensions.WinUI.Theming;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 
@@ -106,15 +107,6 @@ public enum RefBadgeKind
 /// <param name="IsHead">The currently checked-out branch, which is drawn emphasised.</param>
 public sealed record RefBadge(string Name, RefBadgeKind Kind, bool IsHead)
 {
-    private static readonly SolidColorBrush _localBrush = new(Color.FromArgb(56, 88, 166, 255));
-    private static readonly SolidColorBrush _localText = new(Color.FromArgb(255, 88, 166, 255));
-    private static readonly SolidColorBrush _remoteBrush = new(Color.FromArgb(56, 188, 140, 255));
-    private static readonly SolidColorBrush _remoteText = new(Color.FromArgb(255, 188, 140, 255));
-    private static readonly SolidColorBrush _tagBrush = new(Color.FromArgb(56, 210, 168, 65));
-    private static readonly SolidColorBrush _tagText = new(Color.FromArgb(255, 210, 168, 65));
-    private static readonly SolidColorBrush _headBrush = new(Color.FromArgb(72, 63, 185, 80));
-    private static readonly SolidColorBrush _headText = new(Color.FromArgb(255, 63, 185, 80));
-
     /// <summary>HEAD first, then local branches, then remotes, then tags.</summary>
     public int SortKey => IsHead ? 0 : Kind switch
     {
@@ -123,19 +115,17 @@ public sealed record RefBadge(string Name, RefBadgeKind Kind, bool IsHead)
         _ => 3
     };
 
-    public Brush Background => IsHead ? _headBrush : Kind switch
+    /// <summary>Index into the themed ref brushes: local branch, remote, tag, HEAD.</summary>
+    private int BrushIndex => IsHead ? 3 : Kind switch
     {
-        RefBadgeKind.LocalBranch => _localBrush,
-        RefBadgeKind.Remote => _remoteBrush,
-        _ => _tagBrush
+        RefBadgeKind.LocalBranch => 0,
+        RefBadgeKind.Remote => 1,
+        _ => 2
     };
 
-    public Brush Foreground => IsHead ? _headText : Kind switch
-    {
-        RefBadgeKind.LocalBranch => _localText,
-        RefBadgeKind.Remote => _remoteText,
-        _ => _tagText
-    };
+    public Brush Background => ThemeBrushes.RefFills[BrushIndex];
+
+    public Brush Foreground => ThemeBrushes.RefTexts[BrushIndex];
 
     /// <summary>
     ///  Tags are prefixed rather than relying on colour alone, since a tag and a branch can share a

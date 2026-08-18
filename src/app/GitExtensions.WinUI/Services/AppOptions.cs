@@ -1,10 +1,30 @@
 namespace GitExtensions.WinUI.Services;
 
+/// <summary>
+///  Which theme the shell uses.
+/// </summary>
+/// <remarks>
+///  Serialized by name into the session file, so members can be added freely but not renamed.
+///  <c>Light</c> and <c>Dark</c> are Gitxen's own two themes and keep those names because sessions
+///  written before there were eight themes still hold them.
+/// </remarks>
 public enum AppTheme
 {
+    /// <summary>Follow the Windows light/dark setting, using Gitxen Light and Gitxen Dark.</summary>
     System,
+
+    /// <summary>Gitxen Light.</summary>
     Light,
-    Dark
+
+    /// <summary>Gitxen Dark.</summary>
+    Dark,
+
+    GitHubDark,
+    GitHubLight,
+    VisualStudioDark,
+    VisualStudioLight,
+    CyberpunkDark,
+    CyberpunkLight
 }
 
 /// <summary>How the open repositories are listed.</summary>

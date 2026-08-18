@@ -1,4 +1,5 @@
 using GitExtensions.WinUI.Services;
+using GitExtensions.WinUI.Theming;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -35,7 +36,10 @@ public sealed partial class SettingsView : RepositoryPage
     {
         _isLoading = true;
 
-        ThemeBox.SelectedIndex = (int)AppOptions.Theme;
+        IReadOnlyList<ThemeOption> themes = ThemeOption.Build(ThemeService.IsSystemDark);
+        ThemeGallery.ItemsSource = themes;
+        ThemeGallery.SelectedItem = themes.FirstOrDefault(option => option.Theme == AppOptions.Theme)
+            ?? themes[0];
         CommitsBox.Value = AppOptions.MaxCommits;
         DiffLinesBox.Value = AppOptions.MaxDiffLines;
 
@@ -45,13 +49,14 @@ public sealed partial class SettingsView : RepositoryPage
 
     private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_isLoading || ThemeBox.SelectedIndex < 0)
+        // Also raised while the gallery is being populated, and when a selection is cleared.
+        if (_isLoading || ThemeGallery.SelectedItem is not ThemeOption option)
         {
             return;
         }
 
-        AppOptions.Theme = (AppTheme)ThemeBox.SelectedIndex;
-        ApplyTheme();
+        AppOptions.Theme = option.Theme;
+        ThemeService.Apply();
     }
 
     private void Commits_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -69,25 +74,5 @@ public sealed partial class SettingsView : RepositoryPage
         {
             AppOptions.MaxDiffLines = (int)args.NewValue;
         }
-    }
-
-    /// <summary>
-    ///  Applied to the window's root element rather than the application: Application.RequestedTheme
-    ///  can only be set before the first window exists.
-    /// </summary>
-    private void ApplyTheme()
-    {
-        if (XamlRoot?.Content is FrameworkElement root)
-        {
-            root.RequestedTheme = AppOptions.Theme switch
-            {
-                AppTheme.Light => ElementTheme.Light,
-                AppTheme.Dark => ElementTheme.Dark,
-                _ => ElementTheme.Default
-            };
-        }
-
-        // Diff colours are chosen per theme and cached, so they have to be recomputed.
-        DiffLineViewModel.InvalidatePalette();
     }
 }

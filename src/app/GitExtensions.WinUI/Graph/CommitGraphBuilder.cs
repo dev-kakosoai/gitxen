@@ -1,4 +1,5 @@
 using GitExtensions.Extensibility.Git;
+using GitExtensions.WinUI.Theming;
 using GitUIPluginInterfaces;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
@@ -36,20 +37,14 @@ public sealed class CommitGraphBuilder
     /// </summary>
     public const double ColumnWidth = (MaxLanes * LaneWidth) + 6;
 
-    private static readonly Color[] _laneColors =
-    [
-        Color.FromArgb(255, 88, 166, 255),
-        Color.FromArgb(255, 63, 185, 80),
-        Color.FromArgb(255, 219, 109, 40),
-        Color.FromArgb(255, 188, 140, 255),
-        Color.FromArgb(255, 233, 105, 134),
-        Color.FromArgb(255, 86, 211, 200),
-        Color.FromArgb(255, 210, 168, 65),
-        Color.FromArgb(255, 145, 152, 161)
-    ];
-
-    private static readonly SolidColorBrush[] _laneBrushes =
-        [.. _laneColors.Select(color => new SolidColorBrush(color))];
+    /// <summary>
+    ///  Lane colours come from the theme, which is also where repository group accents come from.
+    /// </summary>
+    /// <remarks>
+    ///  These brush instances outlive a theme change -- only their colour is reassigned -- so a graph
+    ///  that is already on screen recolours itself without being rebuilt.
+    /// </remarks>
+    private static IReadOnlyList<SolidColorBrush> LaneBrushes => ThemeBrushes.Lanes;
 
     /// <summary>Which commit each lane is currently waiting for; null means the lane is free.</summary>
     private readonly List<ObjectId?> _lanes = [];
@@ -156,5 +151,5 @@ public sealed class CommitGraphBuilder
 
     private static double X(int lane) => (Math.Min(lane, MaxLanes) * LaneWidth) + (LaneWidth / 2);
 
-    private static Brush BrushFor(int lane) => _laneBrushes[lane % _laneBrushes.Length];
+    private static Brush BrushFor(int lane) => LaneBrushes[lane % LaneBrushes.Count];
 }

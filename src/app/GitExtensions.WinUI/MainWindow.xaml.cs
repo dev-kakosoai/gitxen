@@ -1,6 +1,7 @@
 using System.ComponentModel.Design;
 using GitExtensions.WinUI.Models;
 using GitExtensions.WinUI.Services;
+using GitExtensions.WinUI.Theming;
 using GitExtensions.WinUI.ViewModels;
 using GitExtensions.WinUI.Views;
 using Microsoft.UI.Dispatching;
@@ -62,6 +63,10 @@ public sealed partial class MainWindow : Window
         // The grouped source is a resource, so it cannot be bound with x:Bind from the markup.
         ((CollectionViewSource)RootGrid.Resources["GroupedTabsSource"]).Source = ViewModel.TabGroups;
 
+        // Takes over the backdrop, the root element's theme and the system caption buttons. The
+        // palette itself is already registered; this is the part that needs a window to exist.
+        ThemeService.Attach(this, RootGrid);
+
         Closed += MainWindow_Closed;
     }
 
@@ -71,16 +76,16 @@ public sealed partial class MainWindow : Window
     ///  Restores the previous session. Called after the window is shown so the tabs stream in visibly
     ///  rather than delaying first paint.
     /// </summary>
-    public async Task RestoreSessionAsync()
+    /// <param name="state">
+    ///  The session, already read by <c>App</c> so that the theme could be applied before the window
+    ///  was built.
+    /// </param>
+    public async Task RestoreSessionAsync(SessionState state)
     {
         // Nothing awaits this, so an escaping exception would vanish without trace and simply leave
         // the shell looking like a first run. Record it instead.
         try
         {
-            SessionState state = SessionStore.Load();
-            AppOptions.Apply(state);
-            ApplyTheme();
-
             // The column keeps whatever width it was dragged to.
             if (state.SidebarWidth > 120)
             {
@@ -98,6 +103,13 @@ public sealed partial class MainWindow : Window
             StartAutoFetch();
             StartSessionSaves();
             await Home.RefreshAsync();
+
+            _hasCompletedSetup = state.HasCompletedSetup;
+
+            if (!_hasCompletedSetup)
+            {
+                ShowSetupWizard();
+            }
         }
         catch (Exception ex)
         {
@@ -170,6 +182,7 @@ public sealed partial class MainWindow : Window
 
         AppOptions.CopyTo(state);
         state.SidebarWidth = Sidebar.Width;
+        state.HasCompletedSetup = _hasCompletedSetup;
         SessionStore.Save(state);
     }
 
@@ -211,6 +224,10 @@ public sealed partial class MainWindow : Window
 
             case HomeAction.Initialise:
                 await InitAsync();
+                break;
+
+            case HomeAction.RunSetup:
+                ShowSetupWizard();
                 break;
         }
     }
@@ -508,21 +525,52 @@ public sealed partial class MainWindow : Window
     private void SyncModeBar() =>
         ModeBar.SelectedItem = ViewModel.Mode == UiMode.Advanced ? AdvancedModeItem : SimpleModeItem;
 
-    /// <summary>
-    ///  Applied to the root element rather than the app: Application.RequestedTheme can only be set
-    ///  before the first window exists.
-    /// </summary>
-    private void ApplyTheme()
-    {
-        RootGrid.RequestedTheme = AppOptions.Theme switch
-        {
-            AppTheme.Light => ElementTheme.Light,
-            AppTheme.Dark => ElementTheme.Dark,
-            _ => ElementTheme.Default
-        };
+    // ---- Setup wizard ----------------------------------------------------------------------------
 
-        // Diff colours are chosen per theme and cached, so they have to be recomputed.
-        DiffLineViewModel.InvalidatePalette();
+    /// <summary>
+    ///  Whether the wizard has been through, either finished or skipped.
+    /// </summary>
+    /// <remarks>
+    ///  Held here rather than in the view model because it is a property of the installation rather
+    ///  than of anything the view model owns, and this is the only place that reads or writes it.
+    /// </remarks>
+    private bool _hasCompletedSetup;
+
+    private void ShowSetupWizard()
+    {
+        // The folder picker has to be initialised with a window handle, which a UserControl has no
+        // way to get, so the wizard is handed the window's own picker.
+        SetupWizard.Initialize(ViewModel.GlobalGit, ViewModel.Mode, PickFolderAsync);
+        SetupWizard.Visibility = Visibility.Visible;
+    }
+
+    private void SetupWizard_ThemeChanged(object? sender, EventArgs e) => ThemeService.Apply();
+
+    private async void SetupWizard_Completed(object? sender, SetupOutcome outcome)
+    {
+        SetupWizard.Visibility = Visibility.Collapsed;
+
+        // Set before anything can fail, so a wizard that has been answered is never shown twice.
+        _hasCompletedSetup = true;
+
+        ViewModel.ImportRepositories(
+            [.. outcome.Repositories.Select(import => (import.Path, import.ProjectName))],
+            [.. outcome.Projects.Select(project => (project.Name.Trim(), project.ColorKey))]);
+
+        // Set through the view model rather than AppOptions: these two drive bindings, and the
+        // property setters are what raise the notifications that redraw the strip and the column.
+        ViewModel.Layout = outcome.Layout;
+        ViewModel.Mode = outcome.Mode;
+        SyncModeBar();
+
+        // The timer captured the old interval, so a changed one only takes effect once restarted.
+        StartAutoFetch();
+
+        await Home.RefreshAsync();
+
+        // Written straight away: everything the wizard collected would otherwise be lost to a crash
+        // before the next periodic save.
+        SaveSession();
     }
 
     private async Task PickAndOpenRepositoryAsync()

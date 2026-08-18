@@ -35,6 +35,9 @@ public sealed class ShellTabGroup : ObservableObject
 
     public int Count => Items.Count;
 
+    /// <summary>The count as text, shown as a plain dim number rather than a badge.</summary>
+    public string CountText => Count.ToString(System.Globalization.CultureInfo.CurrentCulture);
+
     /// <summary>
     ///  Collapsed groups still show their header — that is what you click to bring them back — so the
     ///  chevron is rotated rather than the header hidden.
@@ -49,6 +52,7 @@ public sealed class ShellTabGroup : ObservableObject
     public void RaiseChanged()
     {
         OnPropertyChanged(nameof(Count));
+        OnPropertyChanged(nameof(CountText));
         OnPropertyChanged(nameof(IsExpanded));
         OnPropertyChanged(nameof(ChevronRotation));
         OnPropertyChanged(nameof(Name));

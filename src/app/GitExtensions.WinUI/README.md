@@ -32,6 +32,78 @@ Windows App SDK version-resolution defects, each commented in place. Some of tho
 appear at startup, as `FileNotFoundException` on `WinRT.Runtime` or `Microsoft.Windows.SDK.NET`.
 Always launch the app after touching the csproj.
 
+## The first run
+
+`Views/SetupWizardView` is an overlay across the whole window, shown once when the session says setup
+has not been through. Seven steps: welcome (which also reports whether git is installed at all),
+identity, appearance, behaviour, a folder scan, projects, and a summary. Skipping counts as having
+been through it — being asked again on every launch after saying no once is worse than never asking.
+
+The steps are panels switched by visibility, not pages in a `Frame`, for the same reason the
+repository sections are: going back a step must not discard what was typed into the step you are
+returning to.
+
+**Where each answer goes.** Identity (`user.name`, `user.email`, `init.defaultBranch`) is written to
+git's global configuration through `Services/GlobalGitSettings`, which exists because
+`RepositoryLoader` is built around a repository that already exists and the wizard runs before
+anything has been opened. Theme, auto-fetch and the commit page size are written to `AppOptions`,
+which is read on demand. Layout and UI mode are *not*: they come back on the outcome and the shell
+sets them through `MainViewModel`, whose property setters are what raise the notifications the tab
+strip and the repository column are bound to.
+
+**The scan** is `Services/RepositoryScanner`: an iterative walk over an explicit stack, bounded by a
+depth (4 by default), skipping dependency and build folders, and not descending into a repository
+once it finds one — a repository's submodules are part of it, not separate things to import. The
+branch shown against each hit is read straight out of `.git/HEAD` rather than by running git, because
+a projects folder routinely holds dozens of repositories and a process per repository costs more than
+the entire walk.
+
+**Projects** are proposed from the folders the repositories were found in, which is already how people
+think about them, and the proposed names are editable before anything is created. The alternative
+offered is one project for everything, or none.
+
+Imported repositories are added to Home and **not opened**: thirty tabs appearing at once would be a
+worse first impression than the empty shell the wizard exists to fix. This is why `MaxRecent` in
+`MainViewModel` is 60 rather than the 10 it was when that list was purely most-recently-used.
+
+Home's **Find repositories** button reopens the wizard, which is how a second projects folder gets
+imported later. Settings would be the conventional home for that, but Settings is a repository page
+and is unreachable with nothing open.
+
+A session written before the wizard existed has no `HasCompletedSetup` flag and would deserialise to
+`false`, showing the first-run wizard to someone who has used the app for months. `SessionStore`
+treats a session that already names repositories, groups or recent paths as one that is demonstrably
+past its first run.
+
+## Packaging
+
+Everything that turns a build into something installable lives in
+[`setup/gitxen/`](../../../setup/gitxen/README.md): the MSI, the portable archive, an MSIX, the
+`irm | iex` script, and the winget / Chocolatey / Scoop manifests. One command builds the lot:
+
+```
+pwsh ./setup/gitxen/build/Build-Gitxen.ps1
+```
+
+The shipped payload is a **self-contained** publish (`-r win-x64 --self-contained
+-p:WindowsAppSDKSelfContained=true`), so neither the .NET runtime nor the Windows App SDK has to be
+installed on the target machine. Two properties in the csproj exist purely for that path, and both
+were arrived at through a startup crash rather than a build error:
+
+- **`RuntimeFrameworkVersion` is cleared.** `eng/RepoLayout.props` pins it to `10.0.0` for
+  `Microsoft.NETCore.App`, and MSBuild applies a single value to *every* framework reference, so a
+  RID-specific restore goes looking for `Microsoft.Windows.SDK.NET.Ref 10.0.0`, which has never
+  existed.
+- **`PublishXamlCompilerOutputs` carries the XAML compiler's output into the publish folder.** The
+  `.xbf` files and the app's `.pri` are build outputs that the SDK's publish pipeline does not track,
+  so `dotnet publish` drops them silently. Without the `.pri`, Microsoft.UI.Xaml cannot resolve the
+  app's own XAML and the process dies before the window appears, with a stowed exception
+  (`0xc000027b`) and no managed stack.
+
+The same warning as above applies with more force here: publishing successfully is not proof the
+published application starts. Run the executable out of `artifacts/Release/publish/Gitxen` after any
+change to the csproj or to the packaging.
+
 ## Shape of the code
 
 ```
@@ -123,6 +195,10 @@ Anything under an element with an explicit width is unaffected, which is why the
 the Changes page lays out normally.
 
 ## What is implemented
+
+A first-run wizard that sets the git identity, the theme, the layout and the mode, then scans a
+folder for repositories and imports the ones you pick, grouped into projects taken from the folders
+they were found in. Reachable again from Home.
 
 Open / clone / init, multiple repositories as tabs or a left-hand column, and a Home tab that is
 always first: recent repositories with their current branch and last commit, organised into projects

@@ -1,8 +1,7 @@
 using GitExtensions.WinUI.Diff;
-using Microsoft.UI;
+using GitExtensions.WinUI.Theming;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
-using Windows.UI;
 
 namespace GitExtensions.WinUI;
 
@@ -27,8 +26,6 @@ public sealed record DiffRun(string Text, Brush Foreground);
 /// </remarks>
 public sealed class DiffLineViewModel
 {
-    private static DiffPalette? _palette;
-
     private DiffLineViewModel(DiffLineKind kind, string text, IReadOnlyList<DiffRun> runs, Brush? background, int oldNumber, int newNumber)
     {
         Kind = kind;
@@ -64,20 +61,19 @@ public sealed class DiffLineViewModel
 
     public static DiffLineViewModel Create(string line, string fileName, int oldNumber = 0, int newNumber = 0)
     {
-        DiffPalette palette = _palette ??= DiffPalette.ForCurrentTheme();
         DiffLineKind kind = Classify(line);
 
         // Headers and hunk markers aren't code, so they get a flat colour and no tokenizing.
         if (kind is DiffLineKind.Hunk or DiffLineKind.Header)
         {
-            Brush flat = kind == DiffLineKind.Hunk ? palette.Hunk : palette.Context;
+            Brush flat = kind == DiffLineKind.Hunk ? DiffPalette.Hunk : DiffPalette.Context;
             return new DiffLineViewModel(kind, line, [new DiffRun(line, flat)], background: null, oldNumber, newNumber);
         }
 
         Brush? background = kind switch
         {
-            DiffLineKind.Added => palette.AddedBackground,
-            DiffLineKind.Removed => palette.RemovedBackground,
+            DiffLineKind.Added => DiffPalette.AddedBackground,
+            DiffLineKind.Removed => DiffPalette.RemovedBackground,
             _ => null
         };
 
@@ -88,12 +84,12 @@ public sealed class DiffLineViewModel
         List<DiffRun> runs = [];
         if (marker.Length > 0)
         {
-            runs.Add(new DiffRun(marker, palette.Context));
+            runs.Add(new DiffRun(marker, DiffPalette.Context));
         }
 
         foreach (SyntaxToken token in SyntaxHighlighter.Tokenize(code, fileName))
         {
-            runs.Add(new DiffRun(token.Text, palette.For(token.Kind)));
+            runs.Add(new DiffRun(token.Text, DiffPalette.For(token.Kind)));
         }
 
         return new DiffLineViewModel(kind, line, runs, background, oldNumber, newNumber);
@@ -102,12 +98,8 @@ public sealed class DiffLineViewModel
     /// <summary>A plain, unhighlighted line — used for messages and raw output such as blame.</summary>
     public static DiffLineViewModel CreatePlain(string line)
     {
-        DiffPalette palette = _palette ??= DiffPalette.ForCurrentTheme();
-        return new DiffLineViewModel(DiffLineKind.Context, line, [new DiffRun(line, palette.Context)], null, 0, 0);
+        return new DiffLineViewModel(DiffLineKind.Context, line, [new DiffRun(line, DiffPalette.Context)], null, 0, 0);
     }
-
-    /// <summary>Discards the cached palette so the next diff picks up a theme change.</summary>
-    public static void InvalidatePalette() => _palette = null;
 
     private static DiffLineKind Classify(string line)
     {
@@ -130,48 +122,31 @@ public sealed class DiffLineViewModel
         return line.StartsWith('-') ? DiffLineKind.Removed : DiffLineKind.Context;
     }
 
-    private sealed record DiffPalette(
-        Brush Context,
-        Brush Hunk,
-        Brush Keyword,
-        Brush String,
-        Brush Comment,
-        Brush Number,
-        Brush AddedBackground,
-        Brush RemovedBackground)
+    /// <summary>
+    ///  The colours a diff line is drawn with, as a view onto the theme's brushes.
+    /// </summary>
+    /// <remarks>
+    ///  Nothing is cached or copied here. The brushes are the theme's own instances, which only ever
+    ///  have their colour reassigned, so a diff that is already on screen recolours when the theme
+    ///  changes instead of keeping the colours it was built with until it is read again.
+    /// </remarks>
+    private static class DiffPalette
     {
-        public Brush For(TokenKind kind) => kind switch
+        public static Brush Context => ThemeBrushes.Text;
+
+        public static Brush Hunk => ThemeBrushes.DiffHunkHeader;
+
+        public static Brush AddedBackground => ThemeBrushes.DiffAddedBackground;
+
+        public static Brush RemovedBackground => ThemeBrushes.DiffRemovedBackground;
+
+        public static Brush For(TokenKind kind) => kind switch
         {
-            TokenKind.Keyword => Keyword,
-            TokenKind.String => String,
-            TokenKind.Comment => Comment,
-            TokenKind.Number => Number,
+            TokenKind.Keyword => ThemeBrushes.CodeKeyword,
+            TokenKind.String => ThemeBrushes.CodeString,
+            TokenKind.Comment => ThemeBrushes.CodeComment,
+            TokenKind.Number => ThemeBrushes.CodeNumber,
             _ => Context
         };
-
-        public static DiffPalette ForCurrentTheme()
-        {
-            // Dark-theme colours wash out on white and vice versa, so pick per theme rather than
-            // compromising on one set.
-            bool isDark = Application.Current.RequestedTheme == ApplicationTheme.Dark;
-
-            return new DiffPalette(
-                Context: ThemeBrush(),
-                Hunk: Solid(isDark ? (88, 166, 255) : (9, 105, 218)),
-                Keyword: Solid(isDark ? (255, 123, 114) : (207, 34, 46)),
-                String: Solid(isDark ? (165, 214, 255) : (10, 48, 105)),
-                Comment: Solid(isDark ? (139, 148, 158) : (110, 119, 129)),
-                Number: Solid(isDark ? (121, 192, 255) : (5, 80, 174)),
-                AddedBackground: Solid(isDark ? (46, 90, 60) : (218, 251, 225), isDark ? (byte)90 : (byte)255),
-                RemovedBackground: Solid(isDark ? (103, 46, 46) : (255, 235, 233), isDark ? (byte)90 : (byte)255));
-        }
-
-        private static SolidColorBrush Solid((int R, int G, int B) rgb, byte alpha = 255) =>
-            new(Color.FromArgb(alpha, (byte)rgb.R, (byte)rgb.G, (byte)rgb.B));
-
-        private static Brush ThemeBrush() =>
-            Application.Current.Resources.TryGetValue("TextFillColorPrimaryBrush", out object? brush) && brush is Brush themed
-                ? themed
-                : new SolidColorBrush(Colors.Gray);
     }
 }

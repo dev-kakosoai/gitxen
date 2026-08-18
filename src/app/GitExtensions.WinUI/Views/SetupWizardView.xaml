@@ -1,0 +1,298 @@
+<UserControl
+    x:Class="GitExtensions.WinUI.Views.SetupWizardView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:GitExtensions.WinUI.Models">
+
+    <!--
+        A full-window overlay rather than a ContentDialog: the repository step is a scrolling list of
+        everything a folder scan turned up, which a dialog's content area is far too small to show.
+        The dimmed backdrop is what keeps it reading as modal.
+    -->
+    <Grid Background="{ThemeResource SmokeFillColorDefaultBrush}">
+
+        <Border MaxWidth="920" MaxHeight="760" Margin="32"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1" CornerRadius="10">
+
+            <Grid RowDefinitions="Auto,*,Auto">
+
+                <!-- Header -->
+                <StackPanel Padding="28,24,28,16" Spacing="10"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Image Source="ms-appx:///Assets/gitxen-32.png" Width="28" Height="28"
+                               VerticalAlignment="Center" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="StepTitle" Style="{StaticResource PageTitleStyle}"
+                                       Text="Welcome to Gitxen" />
+                            <TextBlock x:Name="StepSubtitle" Style="{StaticResource PageSubtitleStyle}"
+                                       Text="A few questions, then you are set up." />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <ProgressBar x:Name="StepProgress" Minimum="0" Maximum="6" Value="0" />
+                </StackPanel>
+
+                <!-- Steps. Switched by visibility, so a half-filled box keeps its text when you go back. -->
+                <Grid Grid.Row="1">
+
+                    <!-- 0: Welcome -->
+                    <ScrollViewer x:Name="WelcomeStep" Padding="28,20,28,20">
+                        <StackPanel Spacing="16">
+                            <TextBlock TextWrapping="Wrap"
+                                       Text="Gitxen is a git client for Windows. This wizard sets up the things that are annoying to discover later: who your commits are from, how the app looks, and which repositories you already have." />
+
+                            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <FontIcon x:Name="GitStatusGlyph" Glyph="&#xE73E;" FontSize="16"
+                                                  VerticalAlignment="Center" />
+                                        <TextBlock x:Name="GitStatusText" VerticalAlignment="Center"
+                                                   Text="Checking for git..." FontWeight="SemiBold" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="GitStatusDetail" TextWrapping="Wrap"
+                                               Style="{StaticResource PageSubtitleStyle}" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                       Text="Nothing here is permanent. Every answer can be changed afterwards, and Home keeps a Find repositories button that opens this again." />
+
+                            <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                       Text="Gitxen is free software, a derivative of Git Extensions, under the GNU General Public License version 3." />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- 1: Identity -->
+                    <ScrollViewer x:Name="IdentityStep" Padding="28,20,28,20" Visibility="Collapsed">
+                        <StackPanel Spacing="16">
+                            <TextBlock TextWrapping="Wrap"
+                                       Text="Every commit records a name and an email address. These are written to your global git configuration, so they apply everywhere, not only in Gitxen." />
+
+                            <TextBox x:Name="UserNameBox" Header="Name" PlaceholderText="Ada Lovelace"
+                                     Width="420" HorizontalAlignment="Left" />
+
+                            <TextBox x:Name="UserEmailBox" Header="Email" PlaceholderText="ada@example.com"
+                                     Width="420" HorizontalAlignment="Left" />
+
+                            <InfoBar x:Name="IdentityWarning" IsOpen="False" IsClosable="False"
+                                     Severity="Warning"
+                                     Message="Without a name and an email, git refuses to make a commit. You can leave these blank and set them later." />
+
+                            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="Default branch for new repositories" FontWeight="SemiBold" />
+                                    <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                               Text="Used by git init. It does not rename anything in repositories you already have." />
+                                    <TextBox x:Name="DefaultBranchBox" Text="main" Width="240"
+                                             HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- 2: Appearance -->
+                    <ScrollViewer x:Name="AppearanceStep" Padding="28,20,28,20" Visibility="Collapsed">
+                        <StackPanel Spacing="16">
+                            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Theme" FontWeight="SemiBold" />
+                                    <TextBlock Style="{StaticResource PageSubtitleStyle}"
+                                               Text="Applied as you pick it, so you can see it." />
+                                    <!-- Filled from ThemeOption.Build, so the wizard and the settings
+                                         page can never offer different lists. -->
+                                    <ComboBox x:Name="ThemeBox" MinWidth="220" HorizontalAlignment="Left"
+                                              SelectionChanged="Theme_SelectionChanged" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="How open repositories are listed" FontWeight="SemiBold" />
+                                    <RadioButton x:Name="TabsLayoutOption" Content="Tabs across the top" IsChecked="True" />
+                                    <TextBlock Style="{StaticResource PageSubtitleStyle}" Margin="30,-6,0,0"
+                                               Text="Like a browser. Suits a handful of repositories." />
+                                    <RadioButton x:Name="SidebarLayoutOption" Content="A column down the left" />
+                                    <TextBlock Style="{StaticResource PageSubtitleStyle}" Margin="30,-6,0,0"
+                                               Text="Suits many repositories, or long names." />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="How much to show" FontWeight="SemiBold" />
+                                    <RadioButton x:Name="SimpleModeOption" Content="Simple" IsChecked="True" />
+                                    <TextBlock Style="{StaticResource PageSubtitleStyle}" Margin="30,-6,0,0"
+                                               Text="The everyday commands: changes, history, branches, sync." />
+                                    <RadioButton x:Name="AdvancedModeOption" Content="Advanced" />
+                                    <TextBlock Style="{StaticResource PageSubtitleStyle}" Margin="30,-6,0,0"
+                                               Text="Everything, including reflog, worktrees, submodules and maintenance." />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- 3: Behaviour -->
+                    <ScrollViewer x:Name="BehaviourStep" Padding="28,20,28,20" Visibility="Collapsed">
+                        <StackPanel Spacing="16">
+                            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Fetch in the background" FontWeight="SemiBold" />
+                                    <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                               Text="Ahead and behind counts only move when something fetches. Without this the toolbar keeps saying you are up to date while the remote moves on." />
+                                    <ComboBox x:Name="AutoFetchBox" MinWidth="200" HorizontalAlignment="Left">
+                                        <ComboBoxItem Content="Never" Tag="0" />
+                                        <ComboBoxItem Content="Every 5 minutes" Tag="5" />
+                                        <ComboBoxItem Content="Every 10 minutes" Tag="10" />
+                                        <ComboBoxItem Content="Every 30 minutes" Tag="30" />
+                                        <ComboBoxItem Content="Every hour" Tag="60" />
+                                    </ComboBox>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="How much history to read at a time" FontWeight="SemiBold" />
+                                    <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                               Text="Larger pages mean a slower first paint. More is loaded on demand as you scroll." />
+                                    <ComboBox x:Name="CommitsBox" MinWidth="200" HorizontalAlignment="Left">
+                                        <ComboBoxItem Content="500 commits" Tag="500" />
+                                        <ComboBoxItem Content="2,000 commits" Tag="2000" />
+                                        <ComboBoxItem Content="10,000 commits" Tag="10000" />
+                                    </ComboBox>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- 4: Find repositories -->
+                    <Grid x:Name="RepositoriesStep" Padding="28,20,28,20" Visibility="Collapsed"
+                          RowDefinitions="Auto,Auto,Auto,*">
+
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="Point Gitxen at the folder you keep your work in, and it will find the repositories underneath it." />
+
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" Margin="0,14,0,0">
+                            <Button x:Name="ChooseFolderButton" Content="Choose a folder..."
+                                    Click="ChooseFolder_Click" />
+                            <ComboBox x:Name="DepthBox" MinWidth="180" VerticalAlignment="Center">
+                                <ComboBoxItem Content="Look 2 folders deep" Tag="2" />
+                                <ComboBoxItem Content="Look 4 folders deep" Tag="4" />
+                                <ComboBoxItem Content="Look 6 folders deep" Tag="6" />
+                            </ComboBox>
+                            <Button x:Name="CancelScanButton" Content="Stop" Click="CancelScan_Click"
+                                    Visibility="Collapsed" VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Spacing="8" Margin="0,14,0,10">
+                            <TextBlock x:Name="ScanStatus" Style="{StaticResource PageSubtitleStyle}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Text="No folder chosen yet." />
+                            <ProgressBar x:Name="ScanProgressBar" IsIndeterminate="True" Visibility="Collapsed" />
+                            <StackPanel Orientation="Horizontal" Spacing="10" x:Name="SelectionButtons"
+                                        Visibility="Collapsed">
+                                <Button Content="Select all" Click="SelectAll_Click" />
+                                <Button Content="Select none" Click="SelectNone_Click" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <ListView Grid.Row="3" x:Name="RepositoryList" SelectionMode="None"
+                                  ItemContainerStyle="{StaticResource DenseListViewItemStyle}"
+                                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                  BorderThickness="1" CornerRadius="6">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="models:DiscoveredRepository">
+                                    <!--
+                                        Fixed widths with the star column last: a column placed after a
+                                        star-sized one is arranged off-screen in this app.
+                                    -->
+                                    <Grid ColumnDefinitions="Auto,220,160,*" ColumnSpacing="12" Padding="4,6">
+                                        <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                                                  MinWidth="0" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Name}" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Text="{x:Bind Branch}"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="3" Text="{x:Bind RelativePath}"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+
+                    <!-- 5: Projects -->
+                    <Grid x:Name="ProjectsStep" Padding="28,20,28,20" Visibility="Collapsed"
+                          RowDefinitions="Auto,Auto,*">
+
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="Projects group repositories that are worked on together, so Home is organised the way the work is rather than as one flat list." />
+
+                        <StackPanel Grid.Row="1" Spacing="10" Margin="0,14,0,10">
+                            <RadioButton x:Name="NoProjectsOption" Content="Keep them in one list"
+                                         Checked="ProjectMode_Changed" />
+                            <RadioButton x:Name="FolderProjectsOption" Content="A project for each folder"
+                                         Checked="ProjectMode_Changed" />
+                            <RadioButton x:Name="SingleProjectOption" Content="One project for all of them"
+                                         Checked="ProjectMode_Changed" />
+                            <TextBox x:Name="SingleProjectName" Header="Project name" Text="My work"
+                                     Width="320" HorizontalAlignment="Left" Visibility="Collapsed" />
+                        </StackPanel>
+
+                        <ListView Grid.Row="2" x:Name="ProjectList" SelectionMode="None"
+                                  ItemContainerStyle="{StaticResource DenseListViewItemStyle}"
+                                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                  BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="models:ProposedProject">
+                                    <Grid ColumnDefinitions="Auto,300,*" ColumnSpacing="12" Padding="4,6">
+                                        <Border Width="10" Height="24" CornerRadius="3"
+                                                Background="{x:Bind Accent}" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{x:Bind Name, Mode=TwoWay}"
+                                                 VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="{x:Bind CountText}"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+
+                    <!-- 6: Finish -->
+                    <ScrollViewer x:Name="FinishStep" Padding="28,20,28,20" Visibility="Collapsed">
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="That is everything." Style="{StaticResource PageTitleStyle}" />
+                            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                                <StackPanel x:Name="SummaryPanel" Spacing="8" />
+                            </Border>
+                            <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                       Text="Imported repositories appear on Home. None of them are opened yet, so the app starts on an empty desk." />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <!--
+                    Buttons are a single left-aligned run. Nothing is pinned to the right of a
+                    full-width bar in this app: a column after a star-sized one is arranged
+                    off-screen.
+                -->
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10"
+                            Padding="28,16,28,20"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="0,1,0,0">
+                    <Button x:Name="BackButton" Content="Back" Click="Back_Click" MinWidth="96"
+                            IsEnabled="False" />
+                    <Button x:Name="NextButton" Content="Next" Click="Next_Click" MinWidth="96"
+                            Style="{StaticResource AccentButtonStyle}" />
+                    <Button x:Name="SkipButton" Content="Skip setup" Click="Skip_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

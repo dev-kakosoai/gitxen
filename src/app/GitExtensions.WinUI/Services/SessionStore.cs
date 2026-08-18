@@ -38,6 +38,15 @@ public sealed class SessionState
     public double SidebarWidth { get; set; } = 280;
 
     public WindowBounds? Window { get; set; }
+
+    /// <summary>
+    ///  Whether the first-run wizard has been through, either finished or skipped.
+    /// </summary>
+    /// <remarks>
+    ///  Skipping counts. Being asked again on every launch after saying no once is worse than never
+    ///  having asked.
+    /// </remarks>
+    public bool HasCompletedSetup { get; set; }
 }
 
 /// <summary>
@@ -173,7 +182,10 @@ internal static class SessionStore
                 return new SessionState();
             }
 
-            return JsonSerializer.Deserialize<SessionState>(File.ReadAllText(path), _options) ?? new SessionState();
+            SessionState state = JsonSerializer.Deserialize<SessionState>(File.ReadAllText(path), _options)
+                ?? new SessionState();
+
+            return MarkExistingUserAsSetUp(state);
         }
         catch (Exception ex)
         {
@@ -182,6 +194,27 @@ internal static class SessionStore
             LogRestoreFailure(ex);
             return new SessionState();
         }
+    }
+
+    /// <summary>
+    ///  Treats a session written before the wizard existed as one that has already been through it.
+    /// </summary>
+    /// <remarks>
+    ///  The flag is absent from those files and deserialises to false, which would show the first-run
+    ///  wizard to someone who has been using the app for months. There is nothing in the file that
+    ///  says when it was written, so this reads the next best thing: a session that already names
+    ///  repositories, groups or recent paths belongs to someone who is demonstrably past their first
+    ///  run.
+    /// </remarks>
+    private static SessionState MarkExistingUserAsSetUp(SessionState state)
+    {
+        if (!state.HasCompletedSetup
+            && (state.Repositories.Count > 0 || state.Recent.Count > 0 || state.Groups.Count > 0))
+        {
+            state.HasCompletedSetup = true;
+        }
+
+        return state;
     }
 
     /// <summary>

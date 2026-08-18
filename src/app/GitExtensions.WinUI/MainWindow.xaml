@@ -6,11 +6,9 @@
     xmlns:vm="using:GitExtensions.WinUI.ViewModels"
     xmlns:views="using:GitExtensions.WinUI.Views">
 
-    <!-- Mica ties the window to the desktop behind it; the shell's own surfaces are the layer
-         brushes, which are semi-transparent over it. -->
-    <Window.SystemBackdrop>
-        <MicaBackdrop />
-    </Window.SystemBackdrop>
+    <!-- The backdrop is set in code, not here: Mica ties the window to the desktop behind it, which
+         is right for the themes that mean to look like part of Windows and wrong for the ones that
+         commit to their own background colour. See ThemeService.ApplyBackdrop. -->
 
     <Grid x:Name="RootGrid" RowDefinitions="Auto,*"
           AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop">
@@ -19,6 +17,7 @@
                  of the tree, so x:Bind cannot reach the view model from here. -->
             <CollectionViewSource x:Key="GroupedTabsSource" IsSourceGrouped="True" ItemsPath="Items" />
         </Grid.Resources>
+
 
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Modifiers="Control" Key="O" Invoked="OpenRepositoryAccelerator_Invoked" />
@@ -112,8 +111,10 @@
                                                 Drop="SidebarGroup_Drop" Tag="{x:Bind}">
                                             <Grid ColumnDefinitions="Auto,Auto,120,Auto" ColumnSpacing="8">
                                                 <Button Click="ToggleSidebarGroup_Click" Tag="{x:Bind}"
+                                                        Style="{StaticResource IconButtonStyle}"
                                                         Padding="3,1" VerticalAlignment="Center"
                                                         Visibility="{x:Bind ActionsVisibility}"
+                                                        AutomationProperties.Name="Collapse or expand"
                                                         ToolTipService.ToolTip="Collapse or expand">
                                                     <FontIcon Glyph="&#xE70D;" FontSize="9" />
                                                 </Button>
@@ -124,8 +125,9 @@
                                                            FontSize="12" FontWeight="SemiBold"
                                                            VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis" />
-                                                <InfoBadge Grid.Column="3" Value="{x:Bind Count, Mode=OneWay}"
-                                                           VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="3" Text="{x:Bind CountText, Mode=OneWay}"
+                                                           FontSize="11" VerticalAlignment="Center"
+                                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
@@ -215,5 +217,15 @@
                                       Visibility="{x:Bind ViewModel.RepositoryVisibility, Mode=OneWay}" />
             </Grid>
         </Grid>
+
+        <!--
+            The first-run wizard: an overlay across the whole window, title bar row included, so
+            nothing behind it can be clicked while it is up. Last child, so it draws over everything
+            else. Created collapsed and shown when the session says setup has not been through.
+        -->
+        <views:SetupWizardView x:Name="SetupWizard" Grid.RowSpan="2"
+                               Visibility="Collapsed"
+                               ThemeChanged="SetupWizard_ThemeChanged"
+                               Completed="SetupWizard_Completed" />
     </Grid>
 </Window>

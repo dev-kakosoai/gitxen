@@ -2,6 +2,7 @@
     x:Class="GitExtensions.WinUI.Views.SettingsView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:theming="using:GitExtensions.WinUI.Theming"
     xmlns:views="using:GitExtensions.WinUI.Views">
 
     <ScrollViewer>
@@ -13,24 +14,88 @@
                            Style="{StaticResource PageSubtitleStyle}" />
             </StackPanel>
 
-            <!-- Appearance -->
+            <!--
+                Appearance. A gallery rather than a dropdown: a theme name says almost nothing about
+                what it looks like, and that is the whole basis for the choice. Each swatch is drawn
+                in its own colours, so the row is a genuine side-by-side comparison.
+            -->
             <Border Style="{StaticResource CardBorderStyle}" Padding="16">
-                <Grid ColumnDefinitions="Auto,440,180" ColumnSpacing="14">
-                    <FontIcon Glyph="&#xE771;" FontSize="18" VerticalAlignment="Center"
-                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="Theme" FontWeight="SemiBold" />
-                        <TextBlock Text="Follows Windows unless you pick one."
-                                   Style="{StaticResource PageSubtitleStyle}" />
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="14">
+                        <FontIcon Glyph="&#xE771;" FontSize="18" VerticalAlignment="Center"
+                                  Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Theme" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource PageSubtitleStyle}"
+                                       Text="Takes effect as you select it, everywhere at once." />
+                        </StackPanel>
                     </StackPanel>
-                    <ComboBox Grid.Column="2" x:Name="ThemeBox" MinWidth="140"
-                              VerticalAlignment="Center"
+
+                    <GridView x:Name="ThemeGallery" SelectionMode="Single" Padding="0"
                               SelectionChanged="Theme_SelectionChanged">
-                        <ComboBoxItem Content="System" />
-                        <ComboBoxItem Content="Light" />
-                        <ComboBoxItem Content="Dark" />
-                    </ComboBox>
-                </Grid>
+                        <GridView.ItemTemplate>
+                            <DataTemplate x:DataType="theming:ThemeOption">
+                                <!--
+                                    A miniature of the shell: title bar, a commit row on a card, then
+                                    the accent and the three status colours.
+                                -->
+                                <StackPanel Width="164" Spacing="7">
+                                    <Border Height="96" CornerRadius="6" BorderThickness="1"
+                                            Background="{x:Bind WindowBrush}"
+                                            BorderBrush="{x:Bind StrokeBrush}">
+                                        <StackPanel>
+                                            <Border Height="20" Padding="7,0,7,0"
+                                                    Background="{x:Bind SurfaceBrush}">
+                                                <StackPanel Orientation="Horizontal" Spacing="5"
+                                                            VerticalAlignment="Center">
+                                                    <Border Width="7" Height="7" CornerRadius="2"
+                                                            Background="{x:Bind AccentBrush}" />
+                                                    <Border Width="38" Height="4" CornerRadius="2"
+                                                            Background="{x:Bind TextMutedBrush}" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <StackPanel Padding="8,8,8,0" Spacing="7">
+                                                <Border CornerRadius="4" BorderThickness="1" Padding="6"
+                                                        Background="{x:Bind CardBrush}"
+                                                        BorderBrush="{x:Bind StrokeBrush}">
+                                                    <StackPanel Spacing="5">
+                                                        <Border Width="86" Height="4" CornerRadius="2"
+                                                                HorizontalAlignment="Left"
+                                                                Background="{x:Bind TextBrush}" />
+                                                        <Border Width="54" Height="4" CornerRadius="2"
+                                                                HorizontalAlignment="Left"
+                                                                Background="{x:Bind TextMutedBrush}" />
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                                    <Border Width="30" Height="10" CornerRadius="5"
+                                                            Background="{x:Bind AccentBrush}" />
+                                                    <Border Width="16" Height="10" CornerRadius="5"
+                                                            Background="{x:Bind SuccessBrush}" />
+                                                    <Border Width="16" Height="10" CornerRadius="5"
+                                                            Background="{x:Bind WarningBrush}" />
+                                                    <Border Width="16" Height="10" CornerRadius="5"
+                                                            Background="{x:Bind DangerBrush}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <StackPanel>
+                                        <TextBlock Text="{x:Bind Name}" FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind Detail}" FontSize="11"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </GridView.ItemTemplate>
+                    </GridView>
+                </StackPanel>
             </Border>
 
             <!-- Performance limits -->

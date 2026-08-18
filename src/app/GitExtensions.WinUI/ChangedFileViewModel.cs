@@ -1,7 +1,7 @@
 using GitExtensions.Extensibility.Git;
+using GitExtensions.WinUI.Theming;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
-using Windows.UI;
 
 namespace GitExtensions.WinUI;
 
@@ -16,15 +16,6 @@ public enum FileChangeKind
 
 public sealed class ChangedFileViewModel
 {
-    /// <summary>
-    ///  Marker colours, fixed rather than themed: these four are chosen to stay legible on both the
-    ///  light and dark surfaces, and a semantic "added is green" should not change with the theme.
-    /// </summary>
-    private static readonly SolidColorBrush _addedBrush = new(Color.FromArgb(255, 63, 185, 80));
-    private static readonly SolidColorBrush _modifiedBrush = new(Color.FromArgb(255, 210, 153, 34));
-    private static readonly SolidColorBrush _deletedBrush = new(Color.FromArgb(255, 248, 81, 73));
-    private static readonly SolidColorBrush _renamedBrush = new(Color.FromArgb(255, 88, 166, 255));
-
     public ChangedFileViewModel(GitItemStatus status, bool isWorkingDirectory = false)
     {
         Name = status.Name;
@@ -71,10 +62,10 @@ public sealed class ChangedFileViewModel
 
     public Brush ChangeBrush => Kind switch
     {
-        FileChangeKind.Added => _addedBrush,
-        FileChangeKind.Deleted => _deletedBrush,
-        FileChangeKind.Renamed => _renamedBrush,
-        _ => _modifiedBrush
+        FileChangeKind.Added => ThemeBrushes.FileAdded,
+        FileChangeKind.Deleted => ThemeBrushes.FileDeleted,
+        FileChangeKind.Renamed => ThemeBrushes.FileRenamed,
+        _ => ThemeBrushes.FileModified
     };
 
     public string Detail { get; }

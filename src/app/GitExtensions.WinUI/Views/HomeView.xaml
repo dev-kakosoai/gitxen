@@ -87,6 +87,18 @@
                             <TextBlock Text="Create empty repository" />
                         </StackPanel>
                     </Button>
+
+                    <!--
+                        Scanning a folder for repositories is the setup wizard's job, and it is worth
+                        reaching without waiting for a first run: it is how a second projects folder,
+                        or a machine that already had work on it, gets imported.
+                    -->
+                    <Button Click="Setup_Click" Padding="16,10">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE9D5;" FontSize="14" />
+                            <TextBlock Text="Find repositories" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <TextBlock Style="{StaticResource PageSubtitleStyle}"
@@ -130,9 +142,11 @@
                                     <Border Background="{x:Bind Tint, Mode=OneWay}" CornerRadius="8,8,0,0"
                                             Padding="12,8" AllowDrop="True"
                                             DragOver="Group_DragOver" Drop="Group_Drop" Tag="{x:Bind}">
-                                        <Grid ColumnDefinitions="Auto,Auto,320,Auto" ColumnSpacing="10">
+                                        <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="10">
                                             <Button Click="ToggleGroup_Click" Tag="{x:Bind}"
-                                                    Padding="4,2" VerticalAlignment="Center"
+                                                    Style="{StaticResource IconButtonStyle}"
+                                                    VerticalAlignment="Center"
+                                                    AutomationProperties.Name="Collapse or expand"
                                                     ToolTipService.ToolTip="Collapse or expand">
                                                 <FontIcon Glyph="&#xE70D;" FontSize="10" />
                                             </Button>
@@ -144,18 +158,41 @@
                                             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
                                                         VerticalAlignment="Center">
                                                 <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <InfoBadge Value="{x:Bind Count, Mode=OneWay}"
-                                                           VerticalAlignment="Center" />
+                                                           MaxWidth="420" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{x:Bind CountText, Mode=OneWay}"
+                                                           VerticalAlignment="Center" FontSize="12"
+                                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
                                             </StackPanel>
 
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
-                                                        VerticalAlignment="Center">
-                                                <Button Content="Edit" Click="EditGroup_Click" Tag="{x:Bind}"
-                                                        Padding="10,3" FontSize="11" />
-                                                <Button Content="Delete" Click="DeleteGroup_Click" Tag="{x:Bind}"
-                                                        Padding="10,3" FontSize="11" />
-                                            </StackPanel>
+                                            <!--
+                                                Rename and delete are one-per-project actions that are
+                                                found when they are wanted, so they sit behind a menu
+                                                rather than spending two labelled buttons on every
+                                                header.
+                                            -->
+                                            <Button Grid.Column="3" Style="{StaticResource IconButtonStyle}"
+                                                    VerticalAlignment="Center" HorizontalAlignment="Right"
+                                                    AutomationProperties.Name="Project options"
+                                                    ToolTipService.ToolTip="Project options">
+                                                <FontIcon Glyph="&#xE712;" FontSize="12" />
+                                                <Button.Flyout>
+                                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                        <MenuFlyoutItem Text="Rename or restyle..."
+                                                                        Click="EditGroup_Click" Tag="{x:Bind}">
+                                                            <MenuFlyoutItem.Icon>
+                                                                <FontIcon Glyph="&#xE70F;" />
+                                                            </MenuFlyoutItem.Icon>
+                                                        </MenuFlyoutItem>
+                                                        <MenuFlyoutSeparator />
+                                                        <MenuFlyoutItem Text="Delete project"
+                                                                        Click="DeleteGroup_Click" Tag="{x:Bind}">
+                                                            <MenuFlyoutItem.Icon>
+                                                                <FontIcon Glyph="&#xE74D;" />
+                                                            </MenuFlyoutItem.Icon>
+                                                        </MenuFlyoutItem>
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                            </Button>
                                         </Grid>
                                     </Border>
 

@@ -1,5 +1,7 @@
 using System.ComponentModel.Design;
 using GitCommands;
+using GitExtensions.WinUI.Services;
+using GitExtensions.WinUI.Theming;
 using GitUI;
 using Microsoft.UI.Xaml;
 using Microsoft.VisualStudio.Threading;
@@ -36,10 +38,18 @@ public partial class App : Application
 
         AppSettings.LoadSettings();
 
+        // Read the session and settle the theme before the window is constructed. The theme brushes
+        // become entries on Application.Resources, and every page resolves its ThemeResource
+        // references against them as it is parsed -- a window built first would come up in the WinUI
+        // default colours and then visibly change once the saved theme was applied.
+        SessionState state = SessionStore.Load();
+        AppOptions.Apply(state);
+        ThemeService.Initialize();
+
         MainWindow window = new(_serviceContainer);
         Shell = window;
         window.Activate();
 
-        _ = window.RestoreSessionAsync();
+        _ = window.RestoreSessionAsync(state);
     }
 }

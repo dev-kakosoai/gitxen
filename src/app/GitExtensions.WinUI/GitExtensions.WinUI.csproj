@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- WinUI3 / Windows App SDK requires an OS-versioned TFM; overrides the plain
@@ -28,8 +28,25 @@
          Platform.xml matching $(TargetPlatformVersion) (19041.0), which the .NET SDK requires for
          the TFM but which this machine's installed Windows SDK doesn't ship metadata for — only
          10.0.28000.0 is actually present under Windows Kits\10\Platforms\UAP. Point cswinrt at the
-         version that's really installed, independent of the .NET TFM's OS version. -->
-    <CsWinRTWindowsMetadata>10.0.28000.0</CsWinRTWindowsMetadata>
+         version that's really installed, independent of the .NET TFM's OS version. Left
+         overridable so that a machine with a different SDK installed (a CI runner) can supply
+         its own. -->
+    <CsWinRTWindowsMetadata Condition="'$(CsWinRTWindowsMetadata)' == ''">10.0.28000.0</CsWinRTWindowsMetadata>
+
+    <!-- The repo opts every project out of publishing (Directory.Build.props); this one is a
+         shipping app, so opt back in. Its publish output is the payload the installers wrap, kept
+         beside the WinForms app's own publish folder. -->
+    <IsPublishable>true</IsPublishable>
+    <PublishDir Condition="'$(IsPublishable)' == 'true'">$(ArtifactsPublishDir)Gitxen\</PublishDir>
+
+    <!-- eng/RepoLayout.props pins RuntimeFrameworkVersion to 10.0.0 for Microsoft.NETCore.App (the
+         WinForms app's runtime bootstrapper reads it). MSBuild applies that one version to *every*
+         FrameworkReference, so a RID-specific publish (what the installer payload needs)
+         asks for Microsoft.Windows.SDK.NET.Ref 10.0.0, a package that does not exist (NU1102).
+         Clearing it here lets each framework reference resolve its own version again. It must be
+         cleared in this project rather than on the command line: a global property also reaches the
+         referenced backend projects and collides with the value they inherit (NU1505). -->
+    <RuntimeFrameworkVersion></RuntimeFrameworkVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -90,5 +107,21 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <!-- The XAML compiler's outputs (the compiled .xbf files, and the .pri index that maps XAML URIs
+       onto them) are build outputs rather than items the SDK's publish pipeline tracks, so
+       `dotnet publish` silently leaves them behind. Without the .pri, Microsoft.UI.Xaml cannot
+       resolve the app's own XAML and the process dies before the window appears, with a stowed
+       exception (0xc000027b) inside Microsoft.UI.Xaml.dll and no managed stack. Carry them over,
+       keeping the folder layout the XAML compiler produced (Styles\, Views\). -->
+  <Target Name="PublishXamlCompilerOutputs" BeforeTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_XamlCompilerOutput Include="$(OutDir)**\*.xbf" />
+      <_XamlCompilerOutput Include="$(OutDir)$(TargetName).pri" />
+      <ResolvedFileToPublish Include="@(_XamlCompilerOutput)"
+                             RelativePath="%(RecursiveDir)%(Filename)%(Extension)"
+                             CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 
 </Project>

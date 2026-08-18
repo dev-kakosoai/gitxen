@@ -24,6 +24,7 @@ public sealed class MainViewModel : ObservableObject
     {
         _executorProvider = serviceContainer.GetRequiredService<IGitExecutorProvider>();
         _creator = new RepositoryCreator(_executorProvider);
+        GlobalGit = new GlobalGitSettings(_executorProvider);
 
         Tabs.Add(Home);
         SelectedTab = Home;
@@ -31,6 +32,15 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Always first in the strip, and never removed.</summary>
     public HomeTabViewModel Home { get; } = new();
+
+    /// <summary>
+    ///  Reads and writes git's global configuration, with no repository open.
+    /// </summary>
+    /// <remarks>
+    ///  Lives here because the setup wizard needs it before anything has been opened, and this is
+    ///  the one object that exists that early and already holds the executor provider.
+    /// </remarks>
+    internal GlobalGitSettings GlobalGit { get; }
 
     public ObservableCollection<ShellTab> Tabs { get; } = [];
 
@@ -517,10 +527,65 @@ public sealed class MainViewModel : ObservableObject
 
         Recent.Insert(0, workingDir);
 
-        while (Recent.Count > 10)
+        while (Recent.Count > MaxRecent)
         {
             Recent.RemoveAt(Recent.Count - 1);
         }
+    }
+
+    /// <summary>
+    ///  How many repositories Home remembers.
+    /// </summary>
+    /// <remarks>
+    ///  This was ten when the list was purely most-recently-used. Projects changed what the list is
+    ///  for: it is now the set of repositories you work on, organised into sections, and the setup
+    ///  wizard imports a whole folder of them in one go. Ten would silently throw most of an import
+    ///  away.
+    /// </remarks>
+    private const int MaxRecent = 60;
+
+    /// <summary>
+    ///  Adds repositories found by the setup wizard to Home, creating the projects they go into.
+    /// </summary>
+    /// <remarks>
+    ///  None of them are opened. Importing thirty repositories and having thirty tabs appear would be
+    ///  a worse first impression than the empty shell this is meant to fix; they are on Home, which is
+    ///  where opening one starts from anyway.
+    /// </remarks>
+    public void ImportRepositories(
+        IReadOnlyList<(string Path, string ProjectName)> repositories,
+        IReadOnlyList<(string Name, string ColorKey)> projects)
+    {
+        Dictionary<string, RepositoryGroup> created = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach ((string name, string colorKey) in projects)
+        {
+            if (name.Length == 0 || created.ContainsKey(name))
+            {
+                continue;
+            }
+
+            RepositoryGroup? existing = Groups.FirstOrDefault(
+                group => string.Equals(group.Name, name, StringComparison.OrdinalIgnoreCase));
+
+            created[name] = existing ?? CreateGroup(name, GroupIcons.Default, colorKey);
+        }
+
+        // Added oldest first, because each one goes to the front of the list.
+        foreach ((string path, string _) in repositories.Reverse())
+        {
+            AddRecent(path);
+        }
+
+        foreach ((string path, string projectName) in repositories)
+        {
+            if (projectName.Length > 0 && created.TryGetValue(projectName, out RepositoryGroup? group))
+            {
+                _groupByPath[path] = group.Name;
+            }
+        }
+
+        Regroup();
     }
 
     // ---- Per-repository state --------------------------------------------------------------------

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using GitExtensions.WinUI.Theming;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
@@ -73,12 +75,25 @@ public sealed class RepositoryGroup : ObservableObject
 
     public int Count => Repositories.Count;
 
+    /// <summary>
+    ///  The count as text, for a plain dim number beside the name.
+    /// </summary>
+    /// <remarks>
+    ///  A header that carries a colour, an icon and a name is already saying enough; a filled badge
+    ///  on top of that competes with all three for a number nobody is being alerted about.
+    /// </remarks>
+    public string CountText => Count.ToString(CultureInfo.CurrentCulture);
+
     public Brush Accent => GroupPalette.Accent(ColorKey);
 
     /// <summary>The header fill — the same hue, faint enough to sit behind text.</summary>
     public Brush Tint => GroupPalette.Tint(ColorKey);
 
-    public void RaiseCountChanged() => OnPropertyChanged(nameof(Count));
+    public void RaiseCountChanged()
+    {
+        OnPropertyChanged(nameof(Count));
+        OnPropertyChanged(nameof(CountText));
+    }
 }
 
 /// <summary>
@@ -91,35 +106,39 @@ public sealed class RepositoryGroup : ObservableObject
 /// </remarks>
 public static class GroupPalette
 {
-    private static readonly Dictionary<string, Color> _colors = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>
+    ///  The colour names a group can be given, and which of the theme's eight categorical colours
+    ///  each one maps to.
+    /// </summary>
+    /// <remarks>
+    ///  Names rather than values, because the name is what gets written to the session file and has to
+    ///  keep meaning the same thing. The values behind them come from the active theme, so a group
+    ///  picked out in green stays legible when the surface it sits on changes from near-black to white.
+    ///  Sharing the graph's lane colours is deliberate: both need hues that are told apart at a glance,
+    ///  and two lists would drift.
+    /// </remarks>
+    private static readonly Dictionary<string, int> _lanes = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Blue"] = Color.FromArgb(255, 88, 166, 255),
-        ["Green"] = Color.FromArgb(255, 63, 185, 80),
-        ["Purple"] = Color.FromArgb(255, 188, 140, 255),
-        ["Amber"] = Color.FromArgb(255, 210, 168, 65),
-        ["Rose"] = Color.FromArgb(255, 233, 105, 134),
-        ["Teal"] = Color.FromArgb(255, 86, 211, 200),
-        ["Slate"] = Color.FromArgb(255, 145, 152, 161)
+        ["Blue"] = 0,
+        ["Green"] = 1,
+        ["Purple"] = 3,
+        ["Amber"] = 6,
+        ["Rose"] = 4,
+        ["Teal"] = 5,
+        ["Slate"] = 7
     };
 
-    private static readonly Dictionary<string, SolidColorBrush> _accents = _colors
-        .ToDictionary(pair => pair.Key, pair => new SolidColorBrush(pair.Value), StringComparer.OrdinalIgnoreCase);
-
-    private static readonly Dictionary<string, SolidColorBrush> _tints = _colors
-        .ToDictionary(
-            pair => pair.Key,
-            pair => new SolidColorBrush(Color.FromArgb(38, pair.Value.R, pair.Value.G, pair.Value.B)),
-            StringComparer.OrdinalIgnoreCase);
-
-    public static IReadOnlyList<string> Keys => [.. _colors.Keys];
+    public static IReadOnlyList<string> Keys => [.. _lanes.Keys];
 
     public static string Default => "Blue";
 
-    public static Brush Accent(string key) =>
-        _accents.TryGetValue(key, out SolidColorBrush? brush) ? brush : _accents[Default];
+    public static Brush Accent(string key) => ThemeBrushes.Lanes[Lane(key)];
 
-    public static Brush Tint(string key) =>
-        _tints.TryGetValue(key, out SolidColorBrush? brush) ? brush : _tints[Default];
+    /// <summary>The same colour as a wash, for the group header to sit on.</summary>
+    public static Brush Tint(string key) => ThemeBrushes.LaneTints[Lane(key)];
+
+    private static int Lane(string key) =>
+        _lanes.TryGetValue(key, out int lane) ? lane : _lanes[Default];
 }
 
 /// <summary>
