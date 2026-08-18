@@ -142,6 +142,14 @@ the installer and publish pipeline (no `BuildDependency` in `GitExtensions.slnx`
   `%LOCALAPPDATA%\GitExtensions.WinUI\session.json`; restore failures are recorded next to it in
   `restore-error.log` rather than silently leaving the shell looking like a first run.
 - There are no tests for this project yet; `Diff/HunkSplitter.cs` is the highest-value thing to cover.
+- **Packaging lives in `setup/gitxen/`** (separate from `setup/installer`, which is the Git Extensions
+  MSI) and is documented in its own README: `build/Build-Gitxen.ps1` produces the MSI, the portable
+  zip, an optional MSIX and the rendered winget / Chocolatey / Scoop manifests, and
+  `.github/workflows/gitxen-release.yml` runs the same steps on a `gitxen-v*` tag. The shipped
+  payload is a self-contained publish; `RuntimeFrameworkVersion` is cleared and
+  `PublishXamlCompilerOutputs` exists in the csproj solely to make that publish produce an
+  application that *starts* — see the WinUI README before touching either. WiX is pinned to 5.x
+  because 6 and 7 require accepting the Open Source Maintenance Fee EULA.
 
 ## Hard rules that apply almost everywhere
 

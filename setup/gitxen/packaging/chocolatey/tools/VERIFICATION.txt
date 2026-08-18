@@ -1,0 +1,22 @@
+VERIFICATION
+
+Verification is intended to assist the Chocolatey moderators and any user who wants to confirm that
+the binary this package installs is the one the maintainers published.
+
+This package does not embed the installer. It downloads
+
+    {{MSI_URL}}
+
+which is the release asset attached to {{RELEASE_TAG}} in the project's GitHub repository, and
+checks it against the SHA256 checksum recorded in chocolateyinstall.ps1:
+
+    {{MSI_SHA256}}
+
+The same checksum is published in SHA256SUMS.txt alongside the release asset, and can be reproduced
+locally with:
+
+    Get-FileHash -Algorithm SHA256 .\Gitxen-{{VERSION}}-x64.msi
+
+The installer is built from source by the workflow in
+.github/workflows/gitxen-release.yml. Gitxen is licensed under GPL-3.0; the licence text is
+included in the installer and at https://github.com/dev-kakosoai/gitextensions/blob/master/LICENSE.md
