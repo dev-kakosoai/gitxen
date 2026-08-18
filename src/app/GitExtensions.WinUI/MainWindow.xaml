@@ -45,8 +45,8 @@
               Visibility="{x:Bind ViewModel.ToolbarVisibility, Mode=OneWay}">
 
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE8AB;" FontSize="15"
-                          Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                <Image Source="ms-appx:///Assets/gitxen-32.png" Width="18" Height="18"
+                       VerticalAlignment="Center" />
                 <TextBlock Text="Gitxen" FontWeight="SemiBold" VerticalAlignment="Center" />
             </StackPanel>
 

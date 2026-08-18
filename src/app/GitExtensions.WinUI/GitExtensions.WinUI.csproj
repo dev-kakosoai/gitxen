@@ -18,6 +18,7 @@
     <Platforms>x64</Platforms>
     <EnableMsixTooling>false</EnableMsixTooling>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\gitxen.ico</ApplicationIcon>
     <!-- CommonAssemblyInfo.cs (shared repo-wide) declares [SupportedOSPlatform("windows7.0")], far
          below what WinRT/WindowsAppSDK APIs need; this project's real floor is the TFM's own OS
          version. async void is the correct, standard signature for XAML event handlers. -->
@@ -77,6 +78,17 @@
     <None Include="$(NuGetPackageRoot)microsoft.windows.sdk.net.ref\10.0.17763.38\lib\net6.0\Microsoft.Windows.SDK.NET.dll"
           CopyToOutputDirectory="PreserveNewest"
           Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Compiled into the executable by ApplicationIcon, and copied out so the window can set
+         its own icon at runtime and so the title bar can show the mark. -->
+    <Content Include="Assets\gitxen.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\gitxen-32.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

@@ -52,6 +52,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         Title = "Gitxen";
+        SetWindowIcon();
 
         // Draw into the title bar so the window reads as one surface rather than a WinUI app wearing a
         // system caption. The drag region is the empty strip left of the caption buttons.
@@ -120,6 +121,31 @@ public sealed partial class MainWindow : Window
         // process, so the work goes through a method that handles its own failures.
         _autoFetchTimer.Tick += (_, _) => _ = FetchAllQuietlyAsync();
         _autoFetchTimer.Start();
+    }
+
+    /// <summary>
+    ///  Puts the application icon on the window itself.
+    /// </summary>
+    /// <remarks>
+    ///  ApplicationIcon only embeds the icon in the executable, which the shell reads for the
+    ///  file and the shortcut. The taskbar button and Alt+Tab read the icon the window carries,
+    ///  and an unpackaged WinUI window has none until it is given one.
+    /// </remarks>
+    private void SetWindowIcon()
+    {
+        try
+        {
+            string icon = Path.Combine(AppContext.BaseDirectory, "Assets", "gitxen.ico");
+
+            if (File.Exists(icon))
+            {
+                AppWindow.SetIcon(icon);
+            }
+        }
+        catch (Exception)
+        {
+            // A missing or unreadable icon is not worth refusing to start over.
+        }
     }
 
     private void StartSessionSaves()

@@ -48,6 +48,7 @@ MainWindow            shell: custom title bar, repo tab strip, empty state
 | `Services/` | `RepositoryLoader` — every git command for an existing repository, split across two files (operations, and `.Objects.cs` for the structured listings). `RepositoryCreator` — clone and init, which run in a parent directory. |
 | `Models/` | Records the pages bind to: `BranchInfo`, `RemoteInfo`, `TagInfo`, `StashInfo`, `SubmoduleInfo`, `WorktreeInfo`, `ReflogEntry`, plus `RevisionQuery` and the operation option records. |
 | `Diff/` | `DiffParser` (raw diff to rows), `HunkSplitter` (raw diff to applicable patches), `SyntaxHighlighter`. |
+| `Assets/` | The Gitxen mark. `gitxen.svg` is the vector master; the PNGs beside it are rendered from the same geometry, and `gitxen.ico` bundles them for the shell. |
 
 The tab strip is a `TabView` with no content: the repository view is hosted in its own grid row
 instead, because `TabView` arranges its content at the content's desired size rather than filling the
@@ -56,6 +57,26 @@ space, which left short pages floating in a fraction of the window.
 Sections are switched by visibility rather than navigated to in a `Frame`. A `Frame` recreates its
 page on every visit, which would discard the commit list's scroll position and any half-typed commit
 message.
+
+## The mark
+
+An X drawn as two crossing strokes on a rounded gradient tile, with commit nodes at the four
+ends and a punched-out node where they meet: an X for Gitxen, and two branches meeting at a
+merge point.
+
+The nodes are drawn only at 48px and above. Below that they close up against the strokes and the
+X stops reading as an X, which is the one thing it has to survive at 16px in a taskbar.
+
+| File | Used for |
+| --- | --- |
+| `gitxen.svg` | Vector master. Everything else is rendered to match it. |
+| `gitxen.ico` | 16-256px. `ApplicationIcon`, so the shell shows it on the executable, and `AppWindow.SetIcon`, so the taskbar and Alt+Tab show it on the window. |
+| `gitxen-32.png` | The title bar. |
+| `favicon.ico`, `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png`, `gitxen-logo.png` | For a site or a readme; not used by the app. |
+
+`ApplicationIcon` alone is not enough — it only embeds the icon in the executable. An unpackaged
+WinUI window carries no icon of its own until it is given one, so `MainWindow` also calls
+`AppWindow.SetIcon` at startup.
 
 ## Conventions worth knowing
 
