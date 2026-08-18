@@ -20,7 +20,7 @@ permissions:
 jobs:
   stale:
     # Restrict to the upstream repository so forks don't run the cleanup.
-    if: ${{ github.repository_owner == 'gitextensions' }}
+    if: ${{ github.repository_owner == 'dev-kakosoai' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write

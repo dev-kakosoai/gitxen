@@ -36,7 +36,7 @@ env:
 jobs:
   # Add the author-feedback label when a reviewer requests changes.
   add-needs-feedback:
-    if: ${{ github.repository_owner == 'gitextensions' && github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' }}
+    if: ${{ github.repository_owner == 'dev-kakosoai' && github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -62,7 +62,7 @@ jobs:
 
   # Remove the author-feedback / no-recent-activity labels on relevant activity.
   remove-labels:
-    if: ${{ github.repository_owner == 'gitextensions' }}
+    if: ${{ github.repository_owner == 'dev-kakosoai' }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
