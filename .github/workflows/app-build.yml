@@ -3,16 +3,17 @@ name: App build and test
 on:
   push:
     branches:
-      - master
+      - main
       - release
       - 'release/**'
       - 'experimental/**'
+      - 'feat/**'
   pull_request:
   workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/release' && !startsWith(github.ref, 'refs/heads/release/') }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/release' && !startsWith(github.ref, 'refs/heads/release/') }}
 
 jobs:
   setup:

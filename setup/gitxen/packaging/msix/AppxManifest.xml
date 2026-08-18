@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for Gitxen, used by build/Build-Gitxen.ps1 -Msix.
+
+  The package is built with makeappx over the same published payload the MSI and the zip wrap, so
+  the application inside it is unchanged: a full-trust desktop application that happens to carry
+  package identity. Publisher must match the subject of the certificate the package is signed with,
+  and for a Store submission both it and Identity/Name are dictated by the reserved name in Partner
+  Center. Pass -MsixPublisher to override the placeholder below.
+-->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap rescap">
+
+  <Identity Name="Kakoso.Gitxen"
+            Publisher="{{MSIX_PUBLISHER}}"
+            Version="{{VERSION4}}"
+            ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Gitxen</DisplayName>
+    <PublisherDisplayName>Kakoso</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Gitxen" Executable="GitExtensions.WinUI.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Gitxen"
+                          Description="A git client for Windows, built with WinUI 3."
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+</Package>

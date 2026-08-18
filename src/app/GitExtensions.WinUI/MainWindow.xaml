@@ -1,0 +1,242 @@
+<Window
+    x:Class="GitExtensions.WinUI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="using:GitExtensions.WinUI.Converters"
+    xmlns:vm="using:GitExtensions.WinUI.ViewModels"
+    xmlns:views="using:GitExtensions.WinUI.Views">
+
+    <!-- The backdrop is set in code, not here: Mica ties the window to the desktop behind it, which
+         is right for the themes that mean to look like part of Windows and wrong for the ones that
+         commit to their own background colour. See ThemeService.ApplyBackdrop. -->
+
+    <Grid x:Name="RootGrid" RowDefinitions="Auto,*,Auto"
+          AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop">
+        <Grid.Resources>
+            <!-- Its Source is assigned in code: a CollectionViewSource is a resource rather than part
+                 of the tree, so x:Bind cannot reach the view model from here. -->
+            <CollectionViewSource x:Key="GroupedTabsSource" IsSourceGrouped="True" ItemsPath="Items" />
+        </Grid.Resources>
+
+
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Modifiers="Control" Key="O" Invoked="OpenRepositoryAccelerator_Invoked" />
+            <!-- Ctrl+T is the go-to palette, matching a decade of IDE muscle memory. -->
+            <KeyboardAccelerator Modifiers="Control" Key="T" Invoked="GoToAccelerator_Invoked" />
+            <KeyboardAccelerator Modifiers="Control" Key="W" Invoked="CloseTabAccelerator_Invoked" />
+            <KeyboardAccelerator Modifiers="Control" Key="R" Invoked="RefreshAccelerator_Invoked" />
+            <KeyboardAccelerator Modifiers="Control,Shift" Key="P" Invoked="PaletteAccelerator_Invoked" />
+            <!-- Zen is deliberately undiscoverable: no button, hotkey only. -->
+            <KeyboardAccelerator Modifiers="Control,Shift" Key="Z" Invoked="ZenAccelerator_Invoked" />
+            <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
+            <KeyboardAccelerator Key="F1" Invoked="ShortcutsAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
+
+        <!--
+            Custom title bar. The interactive controls sit to the left and the draggable region is the
+            empty space to their right: a control inside the element passed to SetTitleBar cannot
+            receive input, and the far right of the row belongs to the system caption buttons.
+
+            Opening a repository lives on the Home page rather than here — Home is the first tab and
+            cannot be closed, so it is always one click away.
+        -->
+        <Grid Grid.Row="0" Height="48" Padding="14,0,0,0" ColumnDefinitions="Auto,Auto,*"
+              ColumnSpacing="14"
+              Visibility="{x:Bind ViewModel.ToolbarVisibility, Mode=OneWay}">
+
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <Image Source="ms-appx:///Assets/gitxen-32.png" Width="18" Height="18"
+                       VerticalAlignment="Center" />
+                <TextBlock Text="Gitxen" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- Simple keeps the everyday view; Advanced adds the details pane, the commit filter
+                 and the extra history columns. -->
+            <SelectorBar Grid.Column="1" x:Name="ModeBar" SelectionChanged="ModeBar_SelectionChanged"
+                         VerticalAlignment="Center">
+                <SelectorBarItem x:Name="SimpleModeItem" Text="Simple" IsSelected="True" />
+                <SelectorBarItem x:Name="AdvancedModeItem" Text="Advanced" />
+            </SelectorBar>
+
+            <Border Grid.Column="2" x:Name="TitleBarDragRegion" Background="Transparent" />
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+
+            <!--
+                The repository column. An alternative to the tab strip rather than an addition: which
+                one suits depends on how many repositories are open and how long their names are.
+            -->
+            <Border x:Name="Sidebar" Grid.Column="0" Width="280"
+                    BorderThickness="0,0,1,0"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Visibility="{x:Bind ViewModel.SidebarVisibility, Mode=OneWay}">
+                <Grid RowDefinitions="Auto,Auto,*">
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" Padding="16,12,12,8">
+                        <TextBlock Text="Repositories" Style="{StaticResource SectionCaptionStyle}"
+                                   VerticalAlignment="Center" />
+                        <Button Click="AddRepository_Click" Padding="6,2"
+                                AutomationProperties.Name="Open a repository" ToolTipService.ToolTip="Open a repository (Ctrl+O)">
+                            <FontIcon Glyph="&#xE710;" FontSize="{StaticResource IconSizeSmall}" />
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Home sits outside the grouped list: it is not a repository, so it belongs to
+                         no project, and keeping it out leaves the list with exactly one selection. -->
+                    <Button Grid.Row="1" Click="SelectHome_Click" Margin="8,0,8,6"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Padding="10,7">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE80F;" FontSize="{StaticResource IconSizeSmall}" />
+                            <TextBlock Text="Home" />
+                        </StackPanel>
+                    </Button>
+
+                    <!--
+                        Grouped rather than one list per project: nesting lists would give each project
+                        its own selection, and the column has to have exactly one.
+                    -->
+                    <ListView Grid.Row="2" x:Name="SidebarList"
+                              ItemsSource="{Binding Source={StaticResource GroupedTabsSource}}"
+                              SelectedItem="{x:Bind ViewModel.SelectedTab, Mode=TwoWay}"
+                              SelectionMode="Single" Padding="6,0,6,8"
+                              ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+                        <ListView.GroupStyle>
+                            <GroupStyle HidesIfEmpty="False">
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate x:DataType="vm:ShellTabGroup">
+                                        <Border Background="{x:Bind Tint, Mode=OneWay}" CornerRadius="5"
+                                                Padding="8,5" Margin="0,6,0,3"
+                                                AllowDrop="True" DragOver="SidebarGroup_DragOver"
+                                                Drop="SidebarGroup_Drop" Tag="{x:Bind}">
+                                            <Grid ColumnDefinitions="Auto,Auto,120,Auto" ColumnSpacing="8">
+                                                <Button Click="ToggleSidebarGroup_Click" Tag="{x:Bind}"
+                                                        Style="{StaticResource IconButtonStyle}"
+                                                        Padding="3,1" VerticalAlignment="Center"
+                                                        Visibility="{x:Bind ActionsVisibility}"
+                                                        AutomationProperties.Name="Collapse or expand"
+                                                        ToolTipService.ToolTip="Collapse or expand">
+                                                    <FontIcon Glyph="&#xE70D;" FontSize="{StaticResource IconSizeTiny}" />
+                                                </Button>
+                                                <FontIcon Grid.Column="1" Glyph="{x:Bind Glyph, Mode=OneWay}"
+                                                          FontSize="{StaticResource IconSizeSmall}" VerticalAlignment="Center"
+                                                          Foreground="{x:Bind Accent, Mode=OneWay}" />
+                                                <TextBlock Grid.Column="2" Text="{x:Bind Name, Mode=OneWay}"
+                                                           FontSize="{StaticResource FontSizeBody}" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="3" Text="{x:Bind CountText, Mode=OneWay}"
+                                                           FontSize="{StaticResource FontSizeCaption}" VerticalAlignment="Center"
+                                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListView.GroupStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ShellTab">
+                                <Grid ColumnDefinitions="Auto,Auto,140,Auto" ColumnSpacing="8" Padding="4,3"
+                                      CanDrag="True" DragStarting="SidebarItem_DragStarting">
+                                    <!-- The project's colour, so a row is placeable even when its
+                                         section header has scrolled out of view. -->
+                                    <Border Width="3" CornerRadius="2" Margin="0,2"
+                                            Background="{x:Bind Accent, Mode=OneWay}"
+                                            Visibility="{x:Bind GroupVisibility, Mode=OneWay}" />
+
+                                    <FontIcon Grid.Column="1" Glyph="&#xE8B7;" FontSize="{StaticResource IconSizeSmall}"
+                                              VerticalAlignment="Center" />
+
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind Description}" FontSize="{StaticResource FontSizeCaption}"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <Button Grid.Column="3" Click="CloseRepository_Click" Tag="{x:Bind}"
+                                            Padding="6,2" FontSize="{StaticResource FontSizeCaption}" VerticalAlignment="Center"
+                                            AutomationProperties.Name="Close tab" ToolTipService.ToolTip="Close"
+                                            Visibility="{x:Bind conv:Show.If(IsClosable)}">
+                                        <FontIcon Glyph="&#xE711;" FontSize="{StaticResource IconSizeTiny}" />
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Column="1" RowDefinitions="Auto,*">
+
+                <!--
+                    The tab strip only. The pages are hosted in row 1 rather than inside the
+                    TabViewItem: TabView arranges its content at the content's own desired size
+                    instead of filling the area it was given, which left short pages floating in a
+                    fraction of the window.
+
+                    A strip is one row, so it cannot show sections the way the column does. Grouping is
+                    expressed here by ordering — the view model keeps a project's repositories adjacent
+                    — and by the colour stripe each tab carries.
+                -->
+                <TabView Grid.Row="0" x:Name="RepositoryTabs" VerticalAlignment="Top"
+                         TabItemsSource="{x:Bind ViewModel.Tabs, Mode=OneWay}"
+                         SelectedItem="{x:Bind ViewModel.SelectedTab, Mode=TwoWay}"
+                         AddTabButtonClick="RepositoryTabs_AddTabButtonClick"
+                         TabCloseRequested="RepositoryTabs_TabCloseRequested"
+                         Visibility="{x:Bind ViewModel.TabStripVisibility, Mode=OneWay}">
+                    <TabView.TabItemTemplate>
+                        <DataTemplate x:DataType="vm:ShellTab">
+                            <TabViewItem IsClosable="{x:Bind IsClosable}"
+                                         ToolTipService.ToolTip="{x:Bind Description}">
+                                <TabViewItem.IconSource>
+                                    <FontIconSource Glyph="&#xE8B7;" />
+                                </TabViewItem.IconSource>
+                                <TabViewItem.Header>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Border Width="3" CornerRadius="2" Margin="0,3"
+                                                Background="{x:Bind Accent, Mode=OneWay}"
+                                                Visibility="{x:Bind GroupVisibility, Mode=OneWay}"
+                                                ToolTipService.ToolTip="{x:Bind GroupName, Mode=OneWay}" />
+                                        <TextBlock Text="{x:Bind Title}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </TabViewItem.Header>
+                            </TabViewItem>
+                        </DataTemplate>
+                    </TabView.TabItemTemplate>
+                </TabView>
+
+                <views:HomeView Grid.Row="1" x:Name="Home"
+                                ViewModel="{x:Bind ViewModel}"
+                                ActionRequested="Home_ActionRequested"
+                                OpenRequested="Home_OpenRequested"
+                                Visibility="{x:Bind ViewModel.HomeVisibility, Mode=OneWay}" />
+
+                <views:RepositoryView Grid.Row="1" x:Name="Repository"
+                                      Tab="{x:Bind ViewModel.SelectedRepository, Mode=OneWay}"
+                                      Visibility="{x:Bind ViewModel.RepositoryVisibility, Mode=OneWay}" />
+            </Grid>
+        </Grid>
+
+        <!--
+            The status bar: which branch, how far it has diverged, what is uncommitted, and whether
+            anything is running — the facts worth knowing from every section, in one strip. Each
+            segment jumps to the section that acts on it.
+        -->
+        <views:StatusBar Grid.Row="2"
+                         Tab="{x:Bind ViewModel.SelectedRepository, Mode=OneWay}"
+                         SectionRequested="StatusBar_SectionRequested"
+                         Visibility="{x:Bind ViewModel.StatusBarVisibility, Mode=OneWay}" />
+
+        <!--
+            The first-run wizard: an overlay across the whole window, title bar row included, so
+            nothing behind it can be clicked while it is up. Last child, so it draws over everything
+            else. Created collapsed and shown when the session says setup has not been through.
+        -->
+        <views:SetupWizardView x:Name="SetupWizard" Grid.RowSpan="3"
+                               Visibility="Collapsed"
+                               ThemeChanged="SetupWizard_ThemeChanged"
+                               Completed="SetupWizard_Completed" />
+    </Grid>
+</Window>

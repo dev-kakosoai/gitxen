@@ -1,0 +1,124 @@
+<UserControl
+    x:Class="GitExtensions.WinUI.Views.StatusBar"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <UserControl.Resources>
+        <!--
+            Lightweight-styling overrides for every button in the bar. The defaults hover with the
+            theme's control fill and text colours, which are chosen against the window background and
+            can vanish against the accent this bar is painted with. The stroke-on-accent brush is the
+            on-accent text colour at low alpha, so the hover wash adapts with the palette; the theme
+            brushes are mutated in place on a theme switch, so StaticResource stays live.
+        -->
+        <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ControlStrokeColorOnAccentDefaultBrush" />
+        <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ControlStrokeColorOnAccentDefaultBrush" />
+        <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="TextOnAccentFillColorPrimaryBrush" />
+        <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="TextOnAccentFillColorSecondaryBrush" />
+        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="Transparent" />
+        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="Transparent" />
+
+        <!-- A segment: only its text and glyph at rest, full height so the hit target is the bar. -->
+        <Style x:Key="SegmentStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="9,0" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="Foreground" Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+        </Style>
+
+        <Style x:Key="SegmentTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SegmentGlyphStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="{StaticResource IconSizeTiny}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- The star column is last, as the layout constraint in the README requires. -->
+    <Grid Height="26" Background="{ThemeResource AccentFillColorDefaultBrush}"
+          ColumnDefinitions="Auto,*">
+
+        <StackPanel Orientation="Horizontal">
+
+            <!-- Where you are: the checked-out branch. -->
+            <Button Style="{StaticResource SegmentStyle}" Click="Branch_Click"
+                    AutomationProperties.Name="Branches"
+                    ToolTipService.ToolTip="{x:Bind Tab.Upstream, Mode=OneWay}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE8AB;" Style="{StaticResource SegmentGlyphStyle}" />
+                    <TextBlock Text="{x:Bind Tab.BranchHeader, Mode=OneWay}"
+                               Style="{StaticResource SegmentTextStyle}" />
+                </StackPanel>
+            </Button>
+
+            <!-- How far it has diverged. Clicking fetches, which is what makes the counts current. -->
+            <Button Style="{StaticResource SegmentStyle}" Click="Sync_Click"
+                    AutomationProperties.Name="Fetch"
+                    ToolTipService.ToolTip="Fetch from the remote">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <FontIcon Glyph="&#xE895;" Style="{StaticResource SegmentGlyphStyle}" />
+                    <TextBlock Style="{StaticResource SegmentTextStyle}"
+                               Visibility="{x:Bind Tab.AheadVisibility, Mode=OneWay}">
+                        <Run Text="&#x2191;" /><Run Text="{x:Bind Tab.AheadCount, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource SegmentTextStyle}"
+                               Visibility="{x:Bind Tab.BehindVisibility, Mode=OneWay}">
+                        <Run Text="&#x2193;" /><Run Text="{x:Bind Tab.BehindCount, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+            </Button>
+
+            <!-- Uncommitted changes, mirroring the badge on the Changes navigation item. -->
+            <Button Style="{StaticResource SegmentStyle}" Click="Changes_Click"
+                    AutomationProperties.Name="Changes"
+                    ToolTipService.ToolTip="Uncommitted changes">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE70F;" Style="{StaticResource SegmentGlyphStyle}" />
+                    <TextBlock Text="{x:Bind Tab.PendingCount, Mode=OneWay}"
+                               Style="{StaticResource SegmentTextStyle}" />
+                </StackPanel>
+            </Button>
+
+            <!-- Only appears when something is wrong, so it reads as the warning it is. -->
+            <Button Style="{StaticResource SegmentStyle}" Click="Conflicts_Click"
+                    AutomationProperties.Name="Conflicts"
+                    ToolTipService.ToolTip="Unresolved conflicts"
+                    Visibility="{x:Bind Tab.ConflictVisibility, Mode=OneWay}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE7BA;" Style="{StaticResource SegmentGlyphStyle}" />
+                    <TextBlock Text="{x:Bind Tab.ConflictCount, Mode=OneWay}"
+                               Style="{StaticResource SegmentTextStyle}" />
+                </StackPanel>
+            </Button>
+
+            <!-- A paused merge/rebase/cherry-pick, which is otherwise invisible from most sections. -->
+            <Button Style="{StaticResource SegmentStyle}" Click="Operation_Click"
+                    AutomationProperties.Name="Operation in progress"
+                    Visibility="{x:Bind Tab.Operation.BannerVisibility, Mode=OneWay}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE7B3;" Style="{StaticResource SegmentGlyphStyle}" />
+                    <TextBlock Text="{x:Bind Tab.Operation.Title, Mode=OneWay}"
+                               Style="{StaticResource SegmentTextStyle}" />
+                </StackPanel>
+            </Button>
+
+            <ProgressRing Width="12" Height="12" Margin="9,0,0,0" VerticalAlignment="Center"
+                          Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                          IsActive="{x:Bind Tab.IsWorking, Mode=OneWay}"
+                          Visibility="{x:Bind Tab.BusyVisibility, Mode=OneWay}" />
+        </StackPanel>
+
+        <!-- The commit count or the last error, dimmed so the segments stay the focus. -->
+        <TextBlock Grid.Column="1" Margin="9,0" VerticalAlignment="Center"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="{ThemeResource TextOnAccentFillColorSecondaryBrush}"
+                   Text="{x:Bind Tab.Status, Mode=OneWay}"
+                   TextTrimming="CharacterEllipsis" />
+    </Grid>
+</UserControl>

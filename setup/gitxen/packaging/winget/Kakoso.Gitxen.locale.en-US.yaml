@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: Kakoso.Gitxen
+PackageVersion: {{VERSION}}
+PackageLocale: en-US
+Publisher: Kakoso
+PublisherUrl: https://github.com/dev-kakosoai
+PublisherSupportUrl: https://github.com/dev-kakosoai/gitxen/issues
+PackageName: Gitxen
+PackageUrl: https://github.com/dev-kakosoai/gitxen
+License: GPL-3.0-only
+LicenseUrl: https://github.com/dev-kakosoai/gitxen/blob/master/LICENSE.md
+Copyright: Copyright (c) Git Extensions authors
+ShortDescription: A git client for Windows, built with WinUI 3.
+Description: >-
+  Gitxen is a free, open-source git client for Windows with a WinUI 3 interface: staged and unstaged
+  changes with hunk-level staging, a commit graph with ref badges and search, branches, remotes,
+  tags, stashes, submodules, worktrees, reflog recovery and conflict resolution, with several
+  repositories open at once as tabs. It is a derivative work of Git Extensions, distributed under
+  the same GPL-3.0 licence, and is not endorsed by or affiliated with that project.
+Moniker: gitxen
+Tags:
+- git
+- git-client
+- git-gui
+- source-control
+- version-control
+- winui
+ReleaseNotesUrl: https://github.com/dev-kakosoai/gitxen/releases/tag/{{RELEASE_TAG}}
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

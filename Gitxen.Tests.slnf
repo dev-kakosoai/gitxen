@@ -1,0 +1,11 @@
+{
+  "solution": {
+    "path": "GitExtensions.slnx",
+    "projects": [
+      "tests\\app\\UnitTests\\GitCommands.Tests\\GitCommands.Tests.csproj",
+      "tests\\app\\UnitTests\\GitExtUtils.Tests\\GitExtUtils.Tests.csproj",
+      "tests\\app\\UnitTests\\GitExtensions.Extensibility.Tests\\GitExtensions.Extensibility.Tests.csproj",
+      "tests\\plugins\\UnitTests\\GitUIPluginInterfaces.Tests\\GitUIPluginInterfaces.Tests.csproj"
+    ]
+  }
+}

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gitxen MSI.
+
+  Built by build/Build-Gitxen.ps1 through the `wix` CLI rather than a .wixproj: an MSBuild project
+  here would inherit the repo's Directory.Build.props (TargetFramework, UseWindowsForms, central
+  package management), none of which a WiX project can make sense of.
+
+  Preprocessor variables supplied with `wix build -d`:
+    Version     three-part product version, e.g. 0.1.0
+    PayloadDir  the published application folder that becomes the install folder
+    IconFile    the .ico used for the shortcut and the Add/Remove Programs entry
+    LicenseRtf  the licence shown in the installer UI, generated from LICENSE.md
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Gitxen"
+           Manufacturer="Kakoso"
+           Version="$(var.Version)"
+           UpgradeCode="C6FA0B64-F38B-4112-A8CB-F2A7D0199B15"
+           Scope="perMachine"
+           Compressed="yes"
+           InstallerVersion="500"
+           Language="1033">
+
+    <!-- Same-or-older versions are blocked; newer ones replace the install in place, so upgrading
+         never leaves two entries in Add/Remove Programs. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Gitxen is already installed. Uninstall it first to install this version." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="GitxenIcon.ico" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="GitxenIcon.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/dev-kakosoai/gitxen" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/dev-kakosoai/gitxen/issues" />
+    <!-- ARPNOMODIFY is set by WixUI_InstallDir itself; declaring it again here is a build error. -->
+
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Gitxen" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!-- Harvests the whole published payload (~500 files) rather than listing components by hand;
+         the file set changes with every runtime and Windows App SDK update. -->
+    <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PayloadDir)\**" />
+    </ComponentGroup>
+
+    <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder" Guid="A23C0D2F-B116-4C1D-BBCA-B3B4CD8EC86F">
+      <Shortcut Id="GitxenStartMenuShortcut"
+                Name="Gitxen"
+                Description="A git client for Windows"
+                Target="[INSTALLFOLDER]GitExtensions.WinUI.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="GitxenIcon.ico" />
+      <RemoveFolder Id="RemoveStartMenuShortcut" On="uninstall" />
+      <!-- A shortcut cannot be its own key path, so the component is anchored to a registry value. -->
+      <RegistryValue Root="HKLM" Key="Software\Kakoso\Gitxen" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Puts `gitxen` on the command line. The install folder is added rather than the executable
+         copied, because gitxen.cmd resolves its target relative to its own location. -->
+    <Component Id="PathEntry" Directory="INSTALLFOLDER" Guid="3B3DB7B8-5C83-449A-A9AB-89D546CDAC2D">
+      <Environment Id="GitxenPath" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="last" System="yes" Permanent="no" />
+      <RegistryValue Root="HKLM" Key="Software\Kakoso\Gitxen" Name="PathEntry" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="Main" Title="Gitxen" Level="1">
+      <ComponentGroupRef Id="ApplicationFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="PathEntry" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+
+  </Package>
+</Wix>

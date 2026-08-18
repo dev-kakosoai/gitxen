@@ -1,0 +1,127 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinUI3 / Windows App SDK requires an OS-versioned TFM; overrides the plain
+         net10.0-windows moniker inherited from Directory.Build.props. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>GitExtensions.WinUI</RootNamespace>
+    <AssemblyName>GitExtensions.WinUI</AssemblyName>
+    <OutputType>WinExe</OutputType>
+    <UseWinUI>true</UseWinUI>
+    <!-- UseWinUI and UseWindowsForms cannot both be true in the same project (their build
+         targets collide). The FrameworkReference below still gives the backend projects a
+         loadable System.Windows.Forms.dll for the handful of WinForms-typed statics they read
+         (e.g. AppSettings reading System.Windows.Forms.Application.*) without pulling in the
+         WinForms designer/build tooling, and no WinForms window is ever created here. -->
+    <UseWindowsForms>false</UseWindowsForms>
+    <WindowsPackageType>None</WindowsPackageType>
+    <Platforms>x64</Platforms>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\gitxen.ico</ApplicationIcon>
+    <!-- CommonAssemblyInfo.cs (shared repo-wide) declares [SupportedOSPlatform("windows7.0")], far
+         below what WinRT/WindowsAppSDK APIs need; this project's real floor is the TFM's own OS
+         version. async void is the correct, standard signature for XAML event handlers. -->
+    <NoWarn>$(NoWarn);NU1505;CA1416;VSTHRD100</NoWarn>
+
+    <!-- cswinrt.exe (from the Microsoft.Windows.CsWinRT package) defaults to looking up the UAP
+         Platform.xml matching $(TargetPlatformVersion) (19041.0), which the .NET SDK requires for
+         the TFM but which this machine's installed Windows SDK doesn't ship metadata for — only
+         10.0.28000.0 is actually present under Windows Kits\10\Platforms\UAP. Point cswinrt at the
+         version that's really installed, independent of the .NET TFM's OS version. Left
+         overridable so that a machine with a different SDK installed (a CI runner) can supply
+         its own. -->
+    <CsWinRTWindowsMetadata Condition="'$(CsWinRTWindowsMetadata)' == ''">10.0.28000.0</CsWinRTWindowsMetadata>
+
+    <!-- The repo opts every project out of publishing (Directory.Build.props); this one is a
+         shipping app, so opt back in. Its publish output is the payload the installers wrap, kept
+         beside the WinForms app's own publish folder. -->
+    <IsPublishable>true</IsPublishable>
+    <PublishDir Condition="'$(IsPublishable)' == 'true'">$(ArtifactsPublishDir)Gitxen\</PublishDir>
+
+    <!-- eng/RepoLayout.props pins RuntimeFrameworkVersion to 10.0.0 for Microsoft.NETCore.App (the
+         WinForms app's runtime bootstrapper reads it). MSBuild applies that one version to *every*
+         FrameworkReference, so a RID-specific publish (what the installer payload needs)
+         asks for Microsoft.Windows.SDK.NET.Ref 10.0.0, a package that does not exist (NU1102).
+         Clearing it here lets each framework reference resolve its own version again. It must be
+         cleared in this project rather than on the command line: a global property also reaches the
+         referenced backend projects and collides with the value they inherit (NU1505). -->
+    <RuntimeFrameworkVersion></RuntimeFrameworkVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <!-- The CsWinRT source generator bundled with WindowsAppSDK 2.4.0 emits code expecting
+         WinRT.Runtime 2.2.0.0 at runtime, but nothing else in the dependency graph supplies it as a
+         proper NuGet dependency once the (broken, see RemoveWindowsSdkRuntimePack below) Windows SDK
+         Ref FrameworkReference is unavailable — reference the real package directly. -->
+    <PackageReference Include="Microsoft.Windows.CsWinRT" />
+    <PackageReference Include="System.IO.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GitCommands\GitCommands.csproj" />
+    <ProjectReference Include="..\GitExtUtils\GitExtUtils.csproj" />
+    <ProjectReference Include="..\GitExtensions.Extensibility\GitExtensions.Extensibility.csproj" />
+  </ItemGroup>
+
+  <!-- This SDK install (10.0.204) can't resolve a runtime pack for the auto-added Windows SDK
+       projections FrameworkReference (NETSDK1112) even with a correct, verified restore, and this
+       is independent of WindowsAppSDK version. WindowsAppSDK's own build check only needs the
+       resolved FrameworkReference's TargetingPackVersion metadata (still supplied normally), so
+       drop just that one RuntimePack item before the compiled ResolveRuntimePackAssets task gets a
+       chance to fail on it. -->
+  <Target Name="RemoveWindowsSdkRuntimePack" AfterTargets="ProcessFrameworkReferences" BeforeTargets="ResolveRuntimePackAssets">
+    <ItemGroup>
+      <RuntimePack Remove="@(RuntimePack)" Condition="$([System.String]::Copy('%(RuntimePack.Identity)').StartsWith('Microsoft.Windows.SDK.NET.Ref'))" />
+    </ItemGroup>
+  </Target>
+
+  <!-- WindowsAppSDK.WinUI 2.3.6's own prebuilt Microsoft.WinUI.dll hard-references
+       Microsoft.Windows.SDK.NET at exactly 10.0.17763.38 (confirmed via a runtime
+       FileNotFoundException). Nothing in the dependency graph can deliver this as a proper,
+       deps.json-tracked reference (the package it ships in, Microsoft.Windows.SDK.NET.Ref, is
+       PackageType=DotnetPlatform and can only be consumed via FrameworkReference, whose runtime-pack
+       resolution is broken on this SDK install — see above). Drop the raw file next to the exe as
+       plain content; AssemblyResolveFallback.cs registers a .NET Core AssemblyLoadContext.Resolving
+       handler (the standard pattern for assemblies that exist on disk but aren't deps.json-tracked,
+       since the default framework-dependent resolver only trusts deps.json, unlike classic .NET
+       Framework's directory probing) that picks it up by simple name at runtime. -->
+  <ItemGroup>
+    <None Include="$(NuGetPackageRoot)microsoft.windows.sdk.net.ref\10.0.17763.38\lib\net6.0\Microsoft.Windows.SDK.NET.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Compiled into the executable by ApplicationIcon, and copied out so the window can set
+         its own icon at runtime and so the title bar can show the mark. -->
+    <Content Include="Assets\gitxen.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\gitxen-32.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- The XAML compiler's outputs (the compiled .xbf files, and the .pri index that maps XAML URIs
+       onto them) are build outputs rather than items the SDK's publish pipeline tracks, so
+       `dotnet publish` silently leaves them behind. Without the .pri, Microsoft.UI.Xaml cannot
+       resolve the app's own XAML and the process dies before the window appears, with a stowed
+       exception (0xc000027b) inside Microsoft.UI.Xaml.dll and no managed stack. Carry them over,
+       keeping the folder layout the XAML compiler produced (Styles\, Views\). -->
+  <Target Name="PublishXamlCompilerOutputs" BeforeTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_XamlCompilerOutput Include="$(OutDir)**\*.xbf" />
+      <_XamlCompilerOutput Include="$(OutDir)$(TargetName).pri" />
+      <ResolvedFileToPublish Include="@(_XamlCompilerOutput)"
+                             RelativePath="%(RecursiveDir)%(Filename)%(Extension)"
+                             CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+</Project>

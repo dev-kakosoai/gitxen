@@ -18,7 +18,7 @@ on:
   # When commits land on the default branch (for example, another pull request that adds a sign-off is merged), re-validate every open
   # pull request so a now-signed contributor's check flips to passing without them having to push to their own branch.
   push:
-    branches: [master]
+    branches: [main]
     paths: [contributors.txt]
 
 permissions:
@@ -44,7 +44,7 @@ env:
 jobs:
   validate-cla:
     # Do not run on forks of the project; labels only make sense upstream.
-    if: ${{ github.repository_owner == 'gitextensions' }}
+    if: ${{ github.repository_owner == 'dev-kakosoai' }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate contributor sign-off

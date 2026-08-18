@@ -1,0 +1,239 @@
+name: Gitxen release
+
+# Gitxen ships on its own tags (gitxen-v1.2.3) and its own cadence, separate from the Git Extensions
+# release in app-release.yml, which triggers on v* tags.
+
+on:
+  push:
+    tags:
+      - 'gitxen-v[0-9]*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build, e.g. 0.1.0. Nothing is published; artifacts stay on the run.
+        required: true
+        type: string
+
+concurrency:
+  group: gitxen-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # WiX 6 and 7 cannot run until the Open Source Maintenance Fee EULA is accepted; 5.x is the last
+  # version that builds without it. Kept in step with setup/gitxen/build/Build-Gitxen.ps1.
+  WIX_VERSION: 5.0.2
+
+jobs:
+  build:
+    name: Build packages
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-gitxen-${{ hashFiles('Directory.Packages.props') }}
+          restore-keys: |
+            nuget-gitxen-
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch")
+          {
+            $version = "${{ inputs.version }}"
+          }
+          else
+          {
+            $version = "${{ github.ref_name }}".Substring("gitxen-v".Length)
+          }
+
+          if ($version -notmatch '^\d+\.\d+\.\d+$')
+          {
+            throw "Version must be three numeric parts, e.g. 0.1.0. Got '$version'."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=gitxen-v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Resolve the installed Windows SDK metadata version
+        shell: pwsh
+        run: |
+          # cswinrt reads UAP metadata from the Windows SDK that is actually installed, which is not
+          # the 19041 the target framework moniker names. The project defaults to the version on the
+          # maintainer's machine; on a runner, use whatever this image ships.
+          $kits = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows Kits\Installed Roots' -ErrorAction SilentlyContinue).KitsRoot10
+          if (-not $kits) { throw 'No Windows SDK (KitsRoot10) found on this runner.' }
+
+          $platform = Get-ChildItem (Join-Path $kits 'Platforms\UAP') -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName 'Platform.xml') } |
+            Sort-Object { [version]$_.Name } |
+            Select-Object -Last 1
+
+          if (-not $platform) { throw "No UAP platform metadata under $kits." }
+
+          Write-Host "Using Windows SDK metadata $($platform.Name)"
+          # MSBuild reads environment variables as properties, and the project only defaults the
+          # value when it is unset, so this wins.
+          "CsWinRTWindowsMetadata=$($platform.Name)" >> $env:GITHUB_ENV
+
+      - name: Install WiX
+        run: |
+          dotnet tool install --global wix --version ${{ env.WIX_VERSION }}
+          wix extension add --global WixToolset.UI.wixext/${{ env.WIX_VERSION }}
+
+      - name: Build packages
+        shell: pwsh
+        run: ./setup/gitxen/build/Build-Gitxen.ps1 -Version ${{ steps.version.outputs.version }} -Msix
+
+      - name: Upload distribution files
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: gitxen-${{ steps.version.outputs.version }}-dist
+          path: |
+            artifacts/Release/gitxen/*.msi
+            artifacts/Release/gitxen/*.zip
+            artifacts/Release/gitxen/*.msix
+            artifacts/Release/gitxen/SHA256SUMS.txt
+          retention-days: 14
+
+      - name: Upload package manifests
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          # Rendered with this release's URLs and checksums, for the publish jobs below and for
+          # submitting by hand where a channel is not wired up yet.
+          name: gitxen-${{ steps.version.outputs.version }}-manifests
+          path: artifacts/Release/gitxen/packaging/**
+          retention-days: 90
+
+  release:
+    name: Publish the GitHub release
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download distribution files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: gitxen-${{ needs.build.outputs.version }}-dist
+          path: dist
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The MSIX is deliberately not attached: it is unsigned, so it cannot be installed as
+          # published and would only mislead. It stays on the workflow run for signing.
+          gh release create "${{ needs.build.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --title "Gitxen ${{ needs.build.outputs.version }}" \
+            --generate-notes \
+            dist/*.msi dist/*.zip dist/SHA256SUMS.txt
+
+  publish-winget:
+    name: Submit to winget
+    needs: [build, release]
+    # Inert until the repository sets PUBLISH_WINGET, so a release never submits by accident.
+    if: ${{ vars.PUBLISH_WINGET == 'true' }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Submit the manifest
+        shell: pwsh
+        env:
+          # A classic PAT with `public_repo`, used to fork microsoft/winget-pkgs and open the PR.
+          # A GITHUB_TOKEN cannot do this: it has no rights in another repository.
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $version = "${{ needs.build.outputs.version }}"
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ needs.build.outputs.tag }}/Gitxen-$version-x64.msi"
+
+          # wingetcreate recomputes the installer hash from the URL it is given, so the submitted
+          # manifest can only ever describe the file that is really published.
+          Invoke-WebRequest -Uri 'https://aka.ms/wingetcreate/latest' -OutFile wingetcreate.exe -UseBasicParsing
+          .\wingetcreate.exe update Kakoso.Gitxen --version $version --urls "$url" --submit --token $env:WINGET_TOKEN
+
+  publish-chocolatey:
+    name: Push to Chocolatey
+    needs: [build, release]
+    if: ${{ vars.PUBLISH_CHOCOLATEY == 'true' }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Download package manifests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: gitxen-${{ needs.build.outputs.version }}-manifests
+          path: manifests
+
+      - name: Pack and push
+        shell: pwsh
+        env:
+          CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+        run: |
+          Set-Location manifests/chocolatey
+          choco pack
+          choco apikey --key $env:CHOCO_API_KEY --source https://push.chocolatey.org/
+          choco push "gitxen.${{ needs.build.outputs.version }}.nupkg" --source https://push.chocolatey.org/
+
+  publish-scoop:
+    name: Update the Scoop bucket
+    needs: [build, release]
+    if: ${{ vars.PUBLISH_SCOOP == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download package manifests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: gitxen-${{ needs.build.outputs.version }}-manifests
+          path: manifests
+
+      - name: Checkout the bucket
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Set SCOOP_BUCKET_REPOSITORY to the bucket, e.g. dev-kakosoai/scoop-bucket.
+          repository: ${{ vars.SCOOP_BUCKET_REPOSITORY }}
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          path: bucket
+
+      - name: Commit the manifest
+        working-directory: bucket
+        run: |
+          mkdir -p bucket
+          cp ../manifests/scoop/gitxen.json bucket/gitxen.json
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add bucket/gitxen.json
+
+          if git diff --cached --quiet; then
+            echo 'The bucket already describes this version.'
+            exit 0
+          fi
+
+          git commit -m 'gitxen: update to ${{ needs.build.outputs.version }}'
+          git push

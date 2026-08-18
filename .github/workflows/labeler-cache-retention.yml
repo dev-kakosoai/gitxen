@@ -23,8 +23,8 @@ env:
 
 jobs:
   restore-cache:
-    # Do not automatically run the workflow on forks outside the 'gitextensions' org
-    if: ${{ github.event_name == 'workflow_dispatch' || github.repository_owner == 'gitextensions' }}
+    # Do not automatically run the workflow on forks outside the 'dev-kakosoai' account
+    if: ${{ github.event_name == 'workflow_dispatch' || github.repository_owner == 'dev-kakosoai' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

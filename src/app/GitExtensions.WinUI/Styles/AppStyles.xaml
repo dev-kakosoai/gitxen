@@ -1,0 +1,152 @@
+<!--
+    Shared visual vocabulary. Everything here is built on the WinUI system resources
+    (LayerFillColorDefaultBrush, TextFillColorSecondaryBrush, ...) rather than fixed colours, so the
+    whole shell follows the light/dark theme without a second palette to maintain.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Monospace stack: Cascadia Mono ships with Windows Terminal and modern Windows, Consolas is
+         the fallback everywhere else. -->
+    <FontFamily x:Key="CodeFontFamily">Cascadia Mono, Consolas, Courier New</FontFamily>
+
+    <x:Double x:Key="CodeFontSize">12</x:Double>
+
+    <!--
+        The type ramp. Every size in the shell comes from one of these six steps, so the same kind of
+        text is the same size on every page. Sizes are deliberately below the WinUI defaults: this is a
+        dense, list-heavy application and 14pt body text would cost roughly a fifth of the rows on a
+        commit list.
+    -->
+    <x:Double x:Key="FontSizeCaption">11</x:Double>
+    <x:Double x:Key="FontSizeBody">12</x:Double>
+    <x:Double x:Key="FontSizeBodyLarge">14</x:Double>
+    <x:Double x:Key="FontSizeSubtitle">16</x:Double>
+    <x:Double x:Key="FontSizeTitle">20</x:Double>
+    <x:Double x:Key="FontSizeDisplay">30</x:Double>
+
+    <!--
+        Glyph sizes are a separate ramp from the text ramp even where the numbers coincide: a FontIcon
+        is sized to the control it sits in, not to the text ramp, so the two move independently.
+        Tiny is for glyphs inside a chip or a tab close button, where 12 would crowd the container.
+    -->
+    <x:Double x:Key="IconSizeTiny">10</x:Double>
+    <x:Double x:Key="IconSizeSmall">12</x:Double>
+    <x:Double x:Key="IconSizeMedium">14</x:Double>
+    <x:Double x:Key="IconSizeLarge">16</x:Double>
+    <x:Double x:Key="IconSizeEmptyState">40</x:Double>
+
+    <Thickness x:Key="PagePadding">20,16,20,16</Thickness>
+
+    <!-- A raised surface: used for every list, panel and detail card in the shell. -->
+    <Style x:Key="CardBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource LayerFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <!-- The page's own name, at the top of each navigation section. -->
+    <Style x:Key="PageTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeTitle}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="PageSubtitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- Caption above a list or field group. -->
+    <Style x:Key="SectionCaptionStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="ColumnHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource SectionCaptionStyle}">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="CodeTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource CodeFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource CodeFontSize}" />
+    </Style>
+
+    <!-- Commit hashes: monospace so they line up down the column, dimmed so they don't compete
+         with the subject. -->
+    <Style x:Key="HashTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CodeTextStyle}">
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="SecondaryTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Branch/tag chip on a history row. The brushes come from the RefBadge itself. -->
+    <Style x:Key="RefBadgeStyle" TargetType="Border">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="6,0,6,1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!--
+        List rows in this app are dense, two-line, full-width things. The default ListViewItem
+        padding and 40px minimum would waste a third of the vertical space on a commit list, so the
+        pages that show one row per object share this container style.
+    -->
+    <Style x:Key="DenseListViewItemStyle" TargetType="ListViewItem">
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="8,4,8,4" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <!-- Diff lines must not be padded at all: the row height is the line height. -->
+    <Style x:Key="DiffLineItemStyle" TargetType="ListViewItem">
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <!--
+        A button that is only its glyph: no fill and no border at rest, so a row of them reads as
+        icons rather than as a toolbar. The Background setter only governs the rest state, because a
+        control template's visual states outrank a style's setters, so hover and pressed still light
+        up normally.
+    -->
+    <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="6,3" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <!-- Empty-state block: a glyph, a headline and a sentence, centred in the space it fills. -->
+    <Style x:Key="EmptyStateGlyphStyle" TargetType="FontIcon">
+        <Setter Property="FontSize" Value="{StaticResource IconSizeEmptyState}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorTertiaryBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="EmptyStateTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="EmptyStateBodyStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxWidth" Value="360" />
+    </Style>
+</ResourceDictionary>

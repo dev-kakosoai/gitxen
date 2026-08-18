@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: Kakoso.Gitxen
+PackageVersion: {{VERSION}}
+MinimumOSVersion: 10.0.19041.0
+InstallerType: wix
+Scope: machine
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+ReleaseDate: {{RELEASE_DATE}}
+ProductCode: '{{PRODUCT_CODE}}'
+Installers:
+- Architecture: x64
+  InstallerUrl: {{MSI_URL}}
+  InstallerSha256: {{MSI_SHA256}}
+ManifestType: installer
+ManifestVersion: 1.10.0

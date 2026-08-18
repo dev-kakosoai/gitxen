@@ -1,0 +1,867 @@
+using GitExtensions.WinUI.Models;
+using GitExtensions.WinUI.Services;
+using GitExtensions.WinUI.ViewModels;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
+
+namespace GitExtensions.WinUI.Views;
+
+/// <summary>
+///  One open repository: a navigation pane of sections, a command bar of repository-wide actions, and
+///  the result of the last git operation.
+/// </summary>
+/// <remarks>
+///  The navigation pane is what breaks the previous single screen apart. Everything that used to hide
+///  behind a toolbar flyout — branches, remotes, tags, stashes, submodules, worktrees — is a section
+///  with a real list in it, and the actions live on the objects they act on.
+/// </remarks>
+public sealed partial class RepositoryView : UserControl
+{
+    public static readonly DependencyProperty TabProperty = DependencyProperty.Register(
+        nameof(Tab),
+        typeof(RepositoryTabViewModel),
+        typeof(RepositoryView),
+        new PropertyMetadata(null, OnTabPropertyChanged));
+
+    public RepositoryView()
+    {
+        InitializeComponent();
+    }
+
+    public RepositoryTabViewModel? Tab
+    {
+        get => (RepositoryTabViewModel?)GetValue(TabProperty);
+        set => SetValue(TabProperty, value);
+    }
+
+    private static void OnTabPropertyChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args) =>
+        ((RepositoryView)sender).OnTabAssigned();
+
+    /// <summary>Rebuilds the menus that depend on the repository or the machine.</summary>
+    private void OnTabAssigned()
+    {
+        RefreshBranchMenu();
+        RefreshExternalTools();
+        RestoreSection();
+    }
+
+    /// <summary>
+    ///  Selects the section this repository was last on.
+    /// </summary>
+    /// <remarks>
+    ///  Driven through the navigation selection rather than by showing the page directly, so the
+    ///  pane highlight and the page agree and the section is activated exactly as a click would.
+    /// </remarks>
+    private void RestoreSection()
+    {
+        if (Tab is not RepositoryTabViewModel tab || tab.LastSection.Length == 0)
+        {
+            return;
+        }
+
+        NavigationViewItem? item = Navigation.MenuItems
+            .Concat(Navigation.FooterMenuItems)
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate => (candidate.Tag as string) == tab.LastSection);
+
+        if (item is not null)
+        {
+            Navigation.SelectedItem = item;
+        }
+    }
+
+    /// <summary>The section pages, keyed by the Tag on their navigation item.</summary>
+    private IReadOnlyDictionary<string, RepositoryPage> Pages => new Dictionary<string, RepositoryPage>
+    {
+        ["changes"] = ChangesPage,
+        ["conflicts"] = ConflictsPage,
+        ["history"] = HistoryPage,
+        ["reflog"] = ReflogPage,
+        ["branches"] = BranchesPage,
+        ["remotes"] = RemotesPage,
+        ["tags"] = TagsPage,
+        ["stashes"] = StashesPage,
+        ["submodules"] = SubmodulesPage,
+        ["worktrees"] = WorktreesPage,
+        ["gitconfig"] = GitConfigPage,
+        ["maintenance"] = MaintenancePage,
+        ["settings"] = SettingsPage
+    };
+
+    /// <summary>
+    ///  Rebuilds the branch menu whenever the repository reloads, so it never lists a branch that has
+    ///  since been renamed or deleted.
+    /// </summary>
+    private void RefreshBranchMenu()
+    {
+        BranchFlyout.Items.Clear();
+
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        MenuFlyoutItem create = new() { Text = "New branch…" };
+        create.Click += (_, _) => _ = CreateBranchAsync();
+        BranchFlyout.Items.Add(create);
+        BranchFlyout.Items.Add(new MenuFlyoutSeparator());
+
+        foreach (string branch in tab.Branches)
+        {
+            MenuFlyoutItem item = new()
+            {
+                Text = branch,
+
+                // The branch you are on is listed but not offered as a destination.
+                IsEnabled = branch != tab.Branch
+            };
+
+            string target = branch;
+            item.Click += (_, _) => _ = CheckoutAsync(target);
+            BranchFlyout.Items.Add(item);
+        }
+    }
+
+    /// <summary>
+    ///  Rebuilds the Open in menu from the tools that are installed.
+    /// </summary>
+    /// <remarks>
+    ///  Built in code rather than declared in XAML because the list depends on what is on the machine:
+    ///  offering Visual Studio Code to someone who does not have it only produces a failure on click.
+    /// </remarks>
+    private void RefreshExternalTools()
+    {
+        ExternalToolsFlyout.Items.Clear();
+
+        IReadOnlyList<ExternalTool> tools = ExternalTools.Available;
+
+        if (tools.Count == 0)
+        {
+            ExternalToolsFlyout.Items.Add(new MenuFlyoutItem
+            {
+                Text = "Nothing found on your PATH",
+                IsEnabled = false
+            });
+
+            return;
+        }
+
+        foreach (ExternalTool tool in tools)
+        {
+            MenuFlyoutItem item = new()
+            {
+                Text = tool.Name,
+                Icon = new FontIcon { Glyph = tool.Glyph }
+            };
+
+            ExternalTool target = tool;
+            item.Click += (_, _) => OpenIn(target);
+            ExternalToolsFlyout.Items.Add(item);
+        }
+    }
+
+    private void OpenIn(ExternalTool tool)
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        string error = ExternalTools.Launch(tool, tab.WorkingDir);
+
+        if (error.Length > 0)
+        {
+            tab.ReportInformation($"Could not open {tool.Name}", error);
+        }
+    }
+
+    private async Task CreateBranchAsync()
+    {
+        if (await PromptForTextAsync("New branch", "Branch name", "Create") is string name && name.Length > 0)
+        {
+            await RunAsync(tab => tab.CreateBranchAsync(name, checkout: true));
+            RefreshBranchMenu();
+        }
+    }
+
+    private async Task CheckoutAsync(string branch)
+    {
+        await RunAsync(tab => tab.CheckoutBranchAsync(branch));
+        RefreshBranchMenu();
+    }
+
+    // ---- Hosting service ------------------------------------------------------------------------
+    // Everything here opens a browser rather than calling an API. Creating a pull request or reading
+    // issues through the API would mean holding a credential, and this front-end has nowhere safe to
+    // keep one — the session file is plain JSON. The browser is already signed in.
+
+    private async void HostRepository_Click(object sender, RoutedEventArgs e) =>
+        await OpenHostAsync(host => host.BrowseUrl);
+
+    private async void HostBranch_Click(object sender, RoutedEventArgs e) =>
+        await OpenHostAsync(host => host.BranchUrl(Tab?.Branch ?? ""));
+
+    private async void HostPullRequests_Click(object sender, RoutedEventArgs e) =>
+        await OpenHostAsync(host => host.PullRequestsUrl);
+
+    private async void HostIssues_Click(object sender, RoutedEventArgs e) =>
+        await OpenHostAsync(host => host.IssuesUrl);
+
+    /// <summary>
+    ///  Opens the host's "open a pull request" page for the current branch.
+    /// </summary>
+    /// <remarks>
+    ///  Warns when the branch has no upstream: the compare page will not find it, and the fix — push
+    ///  with "track this branch" — is not obvious from the resulting error on the website.
+    /// </remarks>
+    private async void HostCreatePullRequest_Click(object sender, RoutedEventArgs e) =>
+        await CreatePullRequestAsync();
+
+    private async Task CreatePullRequestAsync()
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        if (tab.Upstream.Length == 0)
+        {
+            tab.ReportInformation(
+                "Branch is not on the remote yet",
+                $"'{tab.Branch}' has no upstream, so there is nothing to open a pull request from. "
+                    + "Push it first with \"Track this branch on the remote\" ticked.");
+
+            return;
+        }
+
+        await OpenHostAsync(host => host.CreatePullRequestUrl(tab.Branch));
+    }
+
+    private async Task OpenHostAsync(Func<HostedRepository, string> buildUrl)
+    {
+        if (Tab?.Host is not HostedRepository host)
+        {
+            return;
+        }
+
+        await Windows.System.Launcher.LaunchUriAsync(new Uri(buildUrl(host)));
+    }
+
+    private void Palette_Click(object sender, RoutedEventArgs e) => _ = ShowPaletteAsync();
+
+    /// <summary>
+    ///  Opens the command palette, built from what this repository currently offers.
+    /// </summary>
+    /// <remarks>
+    ///  The chosen command runs after the dialog has closed rather than inside it: several commands
+    ///  open a dialog of their own, and WinUI permits only one at a time.
+    /// </remarks>
+    public async Task ShowPaletteAsync()
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        CommandPalette palette = new(BuildCommands(tab)) { XamlRoot = XamlRoot };
+        await palette.ShowAsync();
+
+        if (palette.Chosen is PaletteCommand chosen)
+        {
+            await chosen.Invoke();
+        }
+    }
+
+    private IReadOnlyList<PaletteCommand> BuildCommands(RepositoryTabViewModel tab)
+    {
+        List<PaletteCommand> commands = [];
+
+        foreach ((string tag, RepositoryPage page) in Pages)
+        {
+            string title = Navigation.MenuItems
+                .Concat(Navigation.FooterMenuItems)
+                .OfType<NavigationViewItem>()
+                .FirstOrDefault(item => (item.Tag as string) == tag)?
+                .Content?.ToString() ?? tag;
+
+            commands.Add(new PaletteCommand(title, "Go to", "", () => NavigateAsync(tag, page)));
+        }
+
+        commands.Add(new PaletteCommand("Fetch", "Repository", "", () => RunAsync(t => t.FetchAsync())));
+        commands.Add(new PaletteCommand("Pull", "Repository", "choose merge or rebase", PullAsync));
+        commands.Add(new PaletteCommand("Push", "Repository", "", PushAsync));
+        commands.Add(new PaletteCommand("Refresh", "Repository", "", () => tab.LoadAsync()));
+        commands.Add(new PaletteCommand("New branch", "Repository", "", CreateBranchAsync));
+        commands.Add(new PaletteCommand("Undo last commit", "Repository", "keeps the changes staged", UndoLastCommitAsync));
+        commands.Add(new PaletteCommand("Stop comparing commits", "Repository", "", () =>
+        {
+            tab.StopComparing();
+            return Task.CompletedTask;
+        }));
+
+        if (tab.Host is HostedRepository host)
+        {
+            commands.Add(new PaletteCommand($"Open {host.Owner}/{host.Name} in browser", "Host", host.Host,
+                () => OpenHostAsync(_ => host.BrowseUrl)));
+            commands.Add(new PaletteCommand("Create pull request", "Host", "opens the compare page",
+                CreatePullRequestAsync));
+            commands.Add(new PaletteCommand("Open pull requests", "Host", "",
+                () => OpenHostAsync(_ => host.PullRequestsUrl)));
+            commands.Add(new PaletteCommand("Open issues", "Host", "", () => OpenHostAsync(_ => host.IssuesUrl)));
+        }
+
+        foreach (ExternalTool tool in ExternalTools.Available)
+        {
+            ExternalTool target = tool;
+            commands.Add(new PaletteCommand($"Open in {tool.Name}", "Open with", "", () =>
+            {
+                OpenIn(target);
+                return Task.CompletedTask;
+            }));
+        }
+
+        foreach (string branch in tab.Branches.Where(branch => branch != tab.Branch))
+        {
+            string target = branch;
+            commands.Add(new PaletteCommand($"Check out {branch}", "Branch", "", () => CheckoutAsync(target)));
+        }
+
+        return commands;
+    }
+
+    /// <summary>
+    ///  Opens the go-to palette: type-to-jump over branches, tags, commits, stashes, files and pages.
+    /// </summary>
+    /// <remarks>
+    ///  The palette opens immediately with whatever is already in memory; listings the user has not
+    ///  visited yet and the tracked-file list stream in behind it, so a cold open is still instant.
+    ///  The chosen jump runs after the dialog has closed, for the same one-dialog-at-a-time reason as
+    ///  the command palette.
+    /// </remarks>
+    public async Task ShowGoToAsync()
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        GoToPalette palette = new(BuildGoToItems(tab)) { XamlRoot = XamlRoot };
+
+        // Awaited by no one on purpose: it appends to the palette while the palette is open.
+        _ = StreamGoToSourcesAsync(palette, tab);
+
+        await palette.ShowAsync();
+
+        if (palette.Chosen is GoToItem chosen)
+        {
+            await chosen.Invoke();
+        }
+    }
+
+    /// <summary>What can be offered without touching git: the sections and every loaded listing.</summary>
+    private List<GoToItem> BuildGoToItems(RepositoryTabViewModel tab)
+    {
+        List<GoToItem> items = [];
+
+        foreach ((string tag, RepositoryPage page) in Pages)
+        {
+            RepositoryPage target = page;
+            string targetTag = tag;
+            items.Add(new GoToItem(
+                SectionGlyphs.GetValueOrDefault(tag, "\uE8A9"),
+                SectionTitle(tag), "Section", "",
+                () => NavigateAsync(targetTag, target))
+            { CategoryRank = 0 });
+        }
+
+        items.AddRange(BranchItems(tab));
+        items.AddRange(TagItems(tab));
+        items.AddRange(StashItems(tab));
+        items.AddRange(RemoteItems(tab));
+        items.AddRange(WorktreeItems(tab));
+        items.AddRange(SubmoduleItems(tab));
+        items.AddRange(CommitItems(tab));
+
+        return items;
+    }
+
+    /// <summary>
+    ///  Loads what was not in memory when the palette opened — listings from unvisited pages and the
+    ///  tracked files — and appends each source as it arrives.
+    /// </summary>
+    private async Task StreamGoToSourcesAsync(GoToPalette palette, RepositoryTabViewModel tab)
+    {
+        try
+        {
+            if (tab.BranchDetails.Count == 0)
+            {
+                await tab.LoadBranchesAsync();
+                palette.AddItems(BranchItems(tab));
+            }
+
+            if (tab.Tags.Count == 0)
+            {
+                await tab.LoadTagsAsync();
+                palette.AddItems(TagItems(tab));
+            }
+
+            if (tab.Stashes.Count == 0)
+            {
+                await tab.LoadStashesAsync();
+                palette.AddItems(StashItems(tab));
+            }
+
+            IReadOnlyList<string> files = await tab.GetTrackedFilesAsync();
+
+            palette.AddItems(files.Select(file =>
+            {
+                string full = System.IO.Path.Combine(tab.WorkingDir, file.Replace('/', '\\'));
+                return new GoToItem(
+                    "\uE7C3", System.IO.Path.GetFileName(file), "File", file,
+                    () =>
+                    {
+                        // Reveal rather than open: a go-to should not guess which editor a path
+                        // belongs to, and Explorer's context menu offers all of them.
+                        System.Diagnostics.Process.Start(
+                            new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{full}\"")
+                            {
+                                UseShellExecute = true
+                            });
+                        return Task.CompletedTask;
+                    })
+                { CategoryRank = 9 };
+            }));
+        }
+        catch (Exception)
+        {
+            // A background source that fails to load just does not appear; the palette stays usable
+            // with whatever did arrive.
+        }
+    }
+
+    private IEnumerable<GoToItem> BranchItems(RepositoryTabViewModel tab)
+    {
+        foreach (BranchInfo branch in tab.BranchDetails.ToList())
+        {
+            yield return new GoToItem(
+                "\uE8AB", branch.Name, "Branch", $"{branch.ShortHash}  {branch.Date}",
+                () => NavigateAsync("branches", BranchesPage))
+            { CategoryRank = 1 };
+        }
+
+        foreach (RemoteBranchInfo branch in tab.RemoteBranches.ToList())
+        {
+            yield return new GoToItem(
+                "\uE968", branch.FullName, "Remote branch", branch.ShortHash,
+                () => NavigateAsync("branches", BranchesPage))
+            { CategoryRank = 4 };
+        }
+    }
+
+    private IEnumerable<GoToItem> TagItems(RepositoryTabViewModel tab) =>
+        tab.Tags.ToList().Select(tag => new GoToItem(
+            "\uE8EC", tag.Name, "Tag", $"{tag.ShortHash}  {tag.Date}",
+            () => NavigateAsync("tags", TagsPage))
+        { CategoryRank = 2 });
+
+    private IEnumerable<GoToItem> StashItems(RepositoryTabViewModel tab) =>
+        tab.Stashes.ToList().Select(stash => new GoToItem(
+            "\uE7B8", stash.Subject, "Stash", stash.Reference,
+            () => NavigateAsync("stashes", StashesPage))
+        { CategoryRank = 3 });
+
+    private IEnumerable<GoToItem> RemoteItems(RepositoryTabViewModel tab) =>
+        tab.Remotes.ToList().Select(remote => new GoToItem(
+            "\uE968", remote.Name, "Remote", remote.FetchUrl,
+            () => NavigateAsync("remotes", RemotesPage))
+        { CategoryRank = 5 });
+
+    private IEnumerable<GoToItem> WorktreeItems(RepositoryTabViewModel tab) =>
+        tab.Worktrees.ToList().Select(worktree => new GoToItem(
+            "\uE8F4", worktree.Branch.Length == 0 ? worktree.Path : worktree.Branch, "Worktree", worktree.Path,
+            () => NavigateAsync("worktrees", WorktreesPage))
+        { CategoryRank = 6 });
+
+    private IEnumerable<GoToItem> SubmoduleItems(RepositoryTabViewModel tab) =>
+        tab.Submodules.ToList().Select(submodule => new GoToItem(
+            "\uE8B7", submodule.Path, "Submodule", submodule.ShortHash,
+            () => NavigateAsync("submodules", SubmodulesPage))
+        { CategoryRank = 7 });
+
+    /// <summary>
+    ///  The loaded page of commits. Jumping selects the commit and shows History, which brings it
+    ///  into view through the selection binding.
+    /// </summary>
+    private IEnumerable<GoToItem> CommitItems(RepositoryTabViewModel tab) =>
+        tab.Commits.ToList().Where(commit => !commit.IsWorkingDirectory).Select(commit => new GoToItem(
+            "\uE81C", commit.Subject, "Commit", $"{commit.ShortHash}  {commit.Author}",
+            async () =>
+            {
+                tab.SelectedCommit = commit;
+                await NavigateAsync("history", HistoryPage);
+            })
+        { CategoryRank = 8 });
+
+    private static readonly IReadOnlyDictionary<string, string> SectionGlyphs = new Dictionary<string, string>
+    {
+        ["changes"] = "\uE70F",
+        ["conflicts"] = "\uE7BA",
+        ["history"] = "\uE81C",
+        ["reflog"] = "\uE7A7",
+        ["branches"] = "\uE8AB",
+        ["remotes"] = "\uE968",
+        ["tags"] = "\uE8EC",
+        ["stashes"] = "\uE7B8",
+        ["submodules"] = "\uE8B7",
+        ["worktrees"] = "\uE8F4",
+        ["gitconfig"] = "\uE9F5",
+        ["maintenance"] = "\uE90F",
+        ["settings"] = "\uE713"
+    };
+
+    private static string SectionTitle(string tag) => tag switch
+    {
+        "gitconfig" => "Git config",
+        _ => char.ToUpperInvariant(tag[0]) + tag[1..]
+    };
+
+    /// <summary>Shows a section by its navigation tag. The status bar's deep links land here.</summary>
+    public async Task NavigateToSectionAsync(string tag)
+    {
+        if (Pages.TryGetValue(tag, out RepositoryPage? page))
+        {
+            await NavigateAsync(tag, page);
+        }
+    }
+
+    private async Task NavigateAsync(string tag, RepositoryPage page)
+    {
+        NavigationViewItem? item = Navigation.MenuItems
+            .Concat(Navigation.FooterMenuItems)
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate => (candidate.Tag as string) == tag);
+
+        if (item is not null)
+        {
+            // Setting the selection drives the same handler a click would, so the page is shown and
+            // activated by one route rather than two.
+            Navigation.SelectedItem = item;
+            return;
+        }
+
+        await page.ActivateAsync();
+    }
+
+    private async Task UndoLastCommitAsync()
+    {
+        if (await ConfirmTextAsync(
+            "Undo the last commit?",
+            "The commit is removed and its changes go back to being staged, ready to commit again. "
+                + "Nothing is lost — the original is still in the reflog.",
+            "Undo"))
+        {
+            await RunAsync(tab => tab.UndoLastCommitAsync());
+        }
+    }
+
+    private async Task<string?> PromptForTextAsync(string title, string label, string acceptText)
+    {
+        TextBox input = new() { Header = label, MinWidth = 320 };
+
+        ContentDialog dialog = new()
+        {
+            Title = title,
+            Content = input,
+            PrimaryButtonText = acceptText,
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        return await dialog.ShowAsync() == ContentDialogResult.Primary ? input.Text.Trim() : null;
+    }
+
+    private async Task<bool> ConfirmTextAsync(string title, string message, string acceptText)
+    {
+        ContentDialog dialog = new()
+        {
+            Title = title,
+            Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = acceptText,
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    private async void Navigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if (args.SelectedItem is not NavigationViewItem { Tag: string tag })
+        {
+            return;
+        }
+
+        IReadOnlyDictionary<string, RepositoryPage> pages = Pages;
+
+        if (!pages.TryGetValue(tag, out RepositoryPage? selected))
+        {
+            return;
+        }
+
+        foreach (RepositoryPage page in pages.Values)
+        {
+            page.Visibility = ReferenceEquals(page, selected) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        PlaySectionEntrance(selected);
+
+        // Remembered so the repository reopens on the section it was left on.
+        if (Tab is RepositoryTabViewModel current)
+        {
+            current.LastSection = tag;
+        }
+
+        // Listings are read on arrival rather than up front, so opening a repository does not pay for
+        // six git calls the user may never look at.
+        await selected.ActivateAsync();
+    }
+
+    /// <summary>How long a section takes to settle when it is switched to.</summary>
+    /// <remarks>
+    ///  Short on purpose. The sections are switched by visibility rather than navigated to, so without
+    ///  this the new page simply replaces the old one in a single frame, which reads as a glitch rather
+    ///  than as a change of place. Long enough to be seen, short enough that it never delays a click.
+    /// </remarks>
+    private static readonly Duration SectionEntranceDuration = new(TimeSpan.FromMilliseconds(160));
+
+    /// <summary>
+    ///  Fades a section in and lifts it slightly into place.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Driven by an explicit storyboard rather than an <see cref="EntranceThemeTransition"/> on the
+    ///   page: a theme transition runs when an element enters the tree, and these pages are all built
+    ///   once at startup and then only toggled between collapsed and visible, so the transition would
+    ///   play once each and never again.
+    ///  </para>
+    ///  <para>
+    ///   Opacity and a render transform are both animated by the compositor, so this costs no layout
+    ///   passes and does not compete with the section's own first load.
+    ///  </para>
+    /// </remarks>
+    private static void PlaySectionEntrance(RepositoryPage page)
+    {
+        // Reused across switches: replacing it every time would discard the one the previous
+        // storyboard is still animating.
+        if (page.RenderTransform is not TranslateTransform transform)
+        {
+            transform = new TranslateTransform();
+            page.RenderTransform = transform;
+        }
+
+        CubicEase easing = new() { EasingMode = EasingMode.EaseOut };
+
+        DoubleAnimation fade = new()
+        {
+            From = 0,
+            To = 1,
+            Duration = SectionEntranceDuration,
+            EasingFunction = easing
+        };
+        Storyboard.SetTarget(fade, page);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+
+        DoubleAnimation rise = new()
+        {
+            From = 8,
+            To = 0,
+            Duration = SectionEntranceDuration,
+            EasingFunction = easing
+        };
+        Storyboard.SetTarget(rise, transform);
+        Storyboard.SetTargetProperty(rise, "Y");
+
+        Storyboard storyboard = new();
+        storyboard.Children.Add(fade);
+        storyboard.Children.Add(rise);
+        storyboard.Begin();
+    }
+
+    private async void OperationContinue_Click(object sender, RoutedEventArgs e) =>
+        await RunAsync(tab => tab.ResolveOperationAsync("continue"));
+
+    private async void OperationSkip_Click(object sender, RoutedEventArgs e) =>
+        await RunAsync(tab => tab.ResolveOperationAsync("skip"));
+
+    /// <summary>Aborting returns the repository to where the operation started, so it is confirmed.</summary>
+    private async void OperationAbort_Click(object sender, RoutedEventArgs e)
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        if (await ConfirmTextAsync(
+            $"Abort the {tab.Operation.CommandName}?",
+            "This returns the repository to where the operation started. Work you have already "
+                + "committed as part of it is discarded.",
+            "Abort"))
+        {
+            await RunAsync(t => t.ResolveOperationAsync("abort"));
+        }
+    }
+
+    /// <summary>Takes the user to the page that fixes the missing identity.</summary>
+    private async void OpenGitConfig_Click(object sender, RoutedEventArgs e) =>
+        await NavigateAsync("gitconfig", GitConfigPage);
+    private async void Refresh_Click(object sender, RoutedEventArgs e)
+    {
+        if (Tab is RepositoryTabViewModel tab)
+        {
+            await tab.LoadAsync();
+        }
+    }
+
+    private async void Fetch_Click(object sender, RoutedEventArgs e) => await RunAsync(tab => tab.FetchAsync());
+
+    /// <summary>
+    ///  Pull, after choosing between merging and rebasing.
+    /// </summary>
+    /// <remarks>
+    ///  The choice is offered rather than defaulted because the two produce different history and the
+    ///  right answer depends on the branch: rebasing a shared branch rewrites commits other people
+    ///  already have.
+    /// </remarks>
+    private async void Pull_Click(object sender, RoutedEventArgs e) => await PullAsync();
+
+    private async Task PullAsync()
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        RadioButtons strategy = new()
+        {
+            Header = "When there are new commits on both sides",
+            ItemsSource = new[] { "Merge them", "Rebase mine on top", "Refuse unless it fast-forwards" },
+            SelectedIndex = 0
+        };
+
+        CheckBox prune = new() { Content = "Delete remote-tracking branches that no longer exist" };
+
+        StackPanel panel = new() { Spacing = 14, Width = 400 };
+        panel.Children.Add(strategy);
+        panel.Children.Add(prune);
+
+        ContentDialog dialog = new()
+        {
+            Title = $"Pull into {tab.Branch}",
+            Content = panel,
+            PrimaryButtonText = "Pull",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        PullOptions options = new(
+            Rebase: strategy.SelectedIndex == 1,
+            Prune: prune.IsChecked == true,
+            FastForwardOnly: strategy.SelectedIndex == 2);
+
+        await RunAsync(t => t.PullAsync(options));
+    }
+
+    /// <summary>
+    ///  Push, with the options a real branch needs.
+    /// </summary>
+    /// <remarks>
+    ///  Force is offered only as <c>--force-with-lease</c>. A bare force discards whatever the remote
+    ///  gained since you last fetched; the lease refuses in exactly that case, which is the difference
+    ///  between rewriting your own history and destroying someone else's.
+    /// </remarks>
+    private async void Push_Click(object sender, RoutedEventArgs e) => await PushAsync();
+
+    private async Task PushAsync()
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        CheckBox setUpstream = new()
+        {
+            Content = "Track this branch on the remote",
+            IsChecked = tab.Upstream.Length == 0,
+            IsEnabled = tab.Upstream.Length == 0
+        };
+
+        CheckBox tags = new() { Content = "Also push tags" };
+        CheckBox force = new() { Content = "Force (with lease) — overwrite the remote branch" };
+
+        StackPanel panel = new() { Spacing = 12, Width = 420 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = tab.Upstream.Length > 0
+                ? $"Pushing '{tab.Branch}' to {tab.Upstream}."
+                : $"Pushing '{tab.Branch}'. It does not track a remote branch yet.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        panel.Children.Add(setUpstream);
+        panel.Children.Add(tags);
+        panel.Children.Add(force);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Force-with-lease refuses the push if the remote has moved since your last fetch, "
+                + "so it cannot silently discard someone else's commits.",
+            Style = (Style)Application.Current.Resources["PageSubtitleStyle"],
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        ContentDialog dialog = new()
+        {
+            Title = "Push",
+            Content = panel,
+            PrimaryButtonText = "Push",
+            CloseButtonText = "Cancel",
+
+            // This is the one action here that changes something off this machine.
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        PushOptions options = new(
+            Branch: tab.Branch,
+            ForceWithLease: force.IsChecked == true,
+            SetUpstream: setUpstream.IsChecked == true,
+            PushAllTags: tags.IsChecked == true);
+
+        await RunAsync(t => t.PushAsync(options));
+    }
+
+    /// <summary>Takes you to the page that can actually resolve them.</summary>
+    private async void ShowConflicts_Click(object sender, RoutedEventArgs e) =>
+        await NavigateAsync("conflicts", ConflictsPage);
+
+    private async Task RunAsync(Func<RepositoryTabViewModel, Task<Services.GitOperationResult>> operation)
+    {
+        if (Tab is RepositoryTabViewModel tab)
+        {
+            tab.Report(await operation(tab));
+        }
+    }
+}

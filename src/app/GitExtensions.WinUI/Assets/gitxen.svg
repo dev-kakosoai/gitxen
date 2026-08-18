@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Gitxen">
+  <title>Gitxen</title>
+
+  <!--
+    Vector master, for the web and for anywhere the raster set is too small. It matches the geometry
+    the icon generator draws: a rounded tile, two crossing strokes, commit nodes at the four ends and
+    a punched-out node where they meet.
+
+    The mark is an X for Gitxen and, read the other way, two branches meeting at a merge point. The
+    raster sizes below 48px drop the nodes, because at that scale they close up and the X stops
+    reading as an X — the one thing it has to survive at 16px.
+  -->
+
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#58A6FF" />
+      <stop offset="1" stop-color="#A874FF" />
+    </linearGradient>
+
+    <mask id="centre">
+      <rect width="256" height="256" fill="white" />
+      <circle cx="128" cy="128" r="17.4" fill="black" />
+    </mask>
+  </defs>
+
+  <rect width="256" height="256" rx="56" ry="56" fill="url(#tile)" />
+
+  <g mask="url(#centre)" stroke="#FFFFFF" stroke-width="29.4" stroke-linecap="round" fill="none">
+    <line x1="76.8" y1="76.8" x2="179.2" y2="179.2" />
+    <line x1="179.2" y1="76.8" x2="76.8" y2="179.2" />
+  </g>
+
+  <g fill="#FFFFFF" mask="url(#centre)">
+    <circle cx="76.8" cy="76.8" r="20" />
+    <circle cx="179.2" cy="179.2" r="20" />
+    <circle cx="179.2" cy="76.8" r="20" />
+    <circle cx="76.8" cy="179.2" r="20" />
+  </g>
+</svg>

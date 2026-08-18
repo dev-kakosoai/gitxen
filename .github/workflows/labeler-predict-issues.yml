@@ -31,7 +31,7 @@ env:
 
 jobs:
   triage-known-windows-update-error:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.repository_owner == 'gitextensions' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.repository_owner == 'dev-kakosoai' }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -78,7 +78,7 @@ jobs:
                 body: `${marker}
             Thanks for reporting this. This runtime loading failure is a transient result of Windows, .NET, or Visual C++ servicing replacing runtime files while Git Extensions is running.
 
-            Restart Git Extensions. If Windows is waiting for a restart, restart Windows too. Current Git Extensions releases suppress many of these misleading crash-report prompts, so please also [upgrade to the latest release](https://github.com/gitextensions/gitextensions/releases/latest).
+            Restart Git Extensions. If Windows is waiting for a restart, restart Windows too. Current Git Extensions releases suppress many of these misleading crash-report prompts, so please also [upgrade to the latest release](https://github.com/dev-kakosoai/gitxen/releases/latest).
 
             If the error continues after restarting Windows and upgrading Git Extensions, please open a new bug report and mention that those steps did not resolve it. This issue has been automatically closed because it matches the known Windows update error.`,
               });
@@ -102,8 +102,8 @@ jobs:
             core.info(`Closed issue #${issue.number} as a known Windows update runtime error.`);
 
   predict-issue-label:
-    # Do not automatically run the workflow on forks outside the 'gitextensions' org
-    if: ${{ (github.event_name == 'workflow_dispatch' || github.repository_owner == 'gitextensions') && needs.triage-known-windows-update-error.outputs.matched != 'true' }}
+    # Do not automatically run the workflow on forks outside the 'dev-kakosoai' account
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.repository_owner == 'dev-kakosoai') && needs.triage-known-windows-update-error.outputs.matched != 'true' }}
     needs: triage-known-windows-update-error
     runs-on: ubuntu-latest
     permissions:
