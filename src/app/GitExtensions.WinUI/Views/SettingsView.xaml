@@ -22,7 +22,7 @@
             <Border Style="{StaticResource CardBorderStyle}" Padding="16">
                 <StackPanel Spacing="12">
                     <StackPanel Orientation="Horizontal" Spacing="14">
-                        <FontIcon Glyph="&#xE771;" FontSize="18" VerticalAlignment="Center"
+                        <FontIcon Glyph="&#xE771;" FontSize="{StaticResource IconSizeLarge}" VerticalAlignment="Center"
                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Theme" FontWeight="SemiBold" />
@@ -84,10 +84,10 @@
                                     </Border>
 
                                     <StackPanel>
-                                        <TextBlock Text="{x:Bind Name}" FontSize="12"
+                                        <TextBlock Text="{x:Bind Name}" FontSize="{StaticResource FontSizeBody}"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{x:Bind Detail}" FontSize="11"
+                                        <TextBlock Text="{x:Bind Detail}" FontSize="{StaticResource FontSizeCaption}"
                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
@@ -98,11 +98,29 @@
                 </StackPanel>
             </Border>
 
+            <!-- Density -->
+            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                <Grid ColumnDefinitions="Auto,440,180" ColumnSpacing="14">
+                    <FontIcon Glyph="&#xE8FD;" FontSize="{StaticResource IconSizeLarge}" VerticalAlignment="Center"
+                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="Density" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource PageSubtitleStyle}"
+                                   Text="Compact fits about a fifth more rows on screen. Lists apply it as they reload." />
+                    </StackPanel>
+                    <ComboBox Grid.Column="2" x:Name="DensityBox" MinWidth="140" VerticalAlignment="Center"
+                              SelectionChanged="Density_SelectionChanged">
+                        <ComboBoxItem Content="Comfortable" />
+                        <ComboBoxItem Content="Compact" />
+                    </ComboBox>
+                </Grid>
+            </Border>
+
             <!-- Performance limits -->
             <Border Style="{StaticResource CardBorderStyle}" Padding="16">
                 <StackPanel Spacing="16">
                     <Grid ColumnDefinitions="Auto,440,180" ColumnSpacing="14">
-                        <FontIcon Glyph="&#xE81C;" FontSize="18" VerticalAlignment="Center"
+                        <FontIcon Glyph="&#xE81C;" FontSize="{StaticResource IconSizeLarge}" VerticalAlignment="Center"
                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Commits per page" FontWeight="SemiBold" />
@@ -116,7 +134,7 @@
                     </Grid>
 
                     <Grid ColumnDefinitions="Auto,440,180" ColumnSpacing="14">
-                        <FontIcon Glyph="&#xE7C3;" FontSize="18" VerticalAlignment="Center"
+                        <FontIcon Glyph="&#xE7C3;" FontSize="{StaticResource IconSizeLarge}" VerticalAlignment="Center"
                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Maximum diff lines" FontWeight="SemiBold" />

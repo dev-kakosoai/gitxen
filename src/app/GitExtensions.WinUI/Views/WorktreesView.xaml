@@ -6,7 +6,7 @@
     xmlns:models="using:GitExtensions.WinUI.Models"
     xmlns:views="using:GitExtensions.WinUI.Views">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,16">
+    <Grid RowDefinitions="Auto,*,Auto" Padding="20,16,20,16">
 
         <StackPanel Orientation="Horizontal" Spacing="24" HorizontalAlignment="Left">
             <StackPanel Spacing="2">
@@ -17,14 +17,14 @@
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Button Click="Add_Click" Style="{ThemeResource AccentButtonStyle}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE710;" FontSize="12" />
+                        <FontIcon Glyph="&#xE710;" FontSize="{StaticResource IconSizeSmall}" />
                         <TextBlock Text="Add worktree" />
                     </StackPanel>
                 </Button>
                 <Button Content="Prune" Click="Prune_Click"
-                        ToolTipService.ToolTip="Forget worktrees whose folders are gone" />
+                        AutomationProperties.Name="Prune worktrees" ToolTipService.ToolTip="Forget worktrees whose folders are gone" />
                 <Button Click="Refresh_Click" ToolTipService.ToolTip="Refresh">
-                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                    <FontIcon Glyph="&#xE72C;" FontSize="{StaticResource IconSizeMedium}" />
                 </Button>
             </StackPanel>
         </StackPanel>
@@ -32,6 +32,14 @@
         <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,16,0,0">
             <ListView ItemsSource="{x:Bind Tab.Worktrees, Mode=OneWay}" SelectionMode="Single" Padding="4"
                       ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+                <!-- Rows animate in as the listing refreshes; supported inline only,
+                     a Transitions-typed style setter fails XAML parsing at runtime. -->
+                <ListView.ItemContainerTransitions>
+                    <TransitionCollection>
+                        <AddDeleteThemeTransition />
+                        <ReorderThemeTransition />
+                    </TransitionCollection>
+                </ListView.ItemContainerTransitions>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:WorktreeInfo">
                         <!-- Fixed widths rather than a star column: see BranchesView. -->
@@ -47,7 +55,7 @@
                                 </MenuFlyout>
                             </Grid.ContextFlyout>
 
-                            <FontIcon Glyph="&#xE8B7;" FontSize="13" VerticalAlignment="Center"
+                            <FontIcon Glyph="&#xE8B7;" FontSize="{StaticResource IconSizeSmall}" VerticalAlignment="Center"
                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -56,18 +64,18 @@
                                     <Border Style="{StaticResource RefBadgeStyle}"
                                             Background="{ThemeResource SystemFillColorSolidNeutralBackgroundBrush}"
                                             Visibility="{x:Bind conv:Show.If(IsMain)}">
-                                        <TextBlock Text="main" FontSize="10" />
+                                        <TextBlock Text="main" FontSize="{StaticResource FontSizeCaption}" />
                                     </Border>
                                     <Border Style="{StaticResource RefBadgeStyle}"
                                             Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
                                             Visibility="{x:Bind conv:Show.If(IsLocked)}">
-                                        <TextBlock Text="locked" FontSize="10" />
+                                        <TextBlock Text="locked" FontSize="{StaticResource FontSizeCaption}" />
                                     </Border>
                                 </StackPanel>
                             </StackPanel>
 
                             <TextBlock Grid.Column="2" Text="{x:Bind BranchOrDetached}"
-                                       Style="{StaticResource SecondaryTextStyle}" FontSize="12" />
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeBody}" />
                             <TextBlock Grid.Column="3" Text="{x:Bind ShortHash}"
                                        Style="{StaticResource HashTextStyle}" />
                         </Grid>
@@ -75,5 +83,14 @@
                 </ListView.ItemTemplate>
             </ListView>
         </Border>
+        <!-- The main checkout is always listed, so this page is never literally empty: the empty
+             state here is "nothing besides the main worktree", shown as a hint rather than a blank. -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="2,10,0,0"
+                    Visibility="{x:Bind conv:Show.IfAtMostOne(Tab.Worktrees.Count), Mode=OneWay}">
+            <FontIcon Glyph="&#xE946;" FontSize="{StaticResource IconSizeSmall}" VerticalAlignment="Center"
+                      Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+            <TextBlock Style="{StaticResource SecondaryTextStyle}"
+                       Text="Only the main checkout. A worktree checks out another branch into its own folder, so you can work on two at once without stashing." />
+        </StackPanel>
     </Grid>
 </views:RepositoryPage>

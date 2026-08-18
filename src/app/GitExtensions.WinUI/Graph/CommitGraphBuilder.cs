@@ -24,7 +24,15 @@ namespace GitExtensions.WinUI.Graph;
 /// </remarks>
 public sealed class CommitGraphBuilder
 {
-    public const double RowHeight = 26;
+    /// <summary>
+    ///  Height of one commit row, and therefore of the lane geometry drawn behind it.
+    /// </summary>
+    /// <remarks>
+    ///  Read at build time rather than a constant: the geometry for a row is built when the commit
+    ///  loads, so a density change takes effect as each list refreshes, without touching rows that
+    ///  are already on screen.
+    /// </remarks>
+    public static double RowHeight => Services.AppOptions.Density == Services.UiDensity.Compact ? 21 : 26;
 
     private const double LaneWidth = 14;
 

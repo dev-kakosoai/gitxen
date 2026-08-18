@@ -3,6 +3,8 @@ using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 
 namespace GitExtensions.WinUI.Views;
 
@@ -410,6 +412,8 @@ public sealed partial class RepositoryView : UserControl
             page.Visibility = ReferenceEquals(page, selected) ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        PlaySectionEntrance(selected);
+
         // Remembered so the repository reopens on the section it was left on.
         if (Tab is RepositoryTabViewModel current)
         {
@@ -419,6 +423,67 @@ public sealed partial class RepositoryView : UserControl
         // Listings are read on arrival rather than up front, so opening a repository does not pay for
         // six git calls the user may never look at.
         await selected.ActivateAsync();
+    }
+
+    /// <summary>How long a section takes to settle when it is switched to.</summary>
+    /// <remarks>
+    ///  Short on purpose. The sections are switched by visibility rather than navigated to, so without
+    ///  this the new page simply replaces the old one in a single frame, which reads as a glitch rather
+    ///  than as a change of place. Long enough to be seen, short enough that it never delays a click.
+    /// </remarks>
+    private static readonly Duration SectionEntranceDuration = new(TimeSpan.FromMilliseconds(160));
+
+    /// <summary>
+    ///  Fades a section in and lifts it slightly into place.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Driven by an explicit storyboard rather than an <see cref="EntranceThemeTransition"/> on the
+    ///   page: a theme transition runs when an element enters the tree, and these pages are all built
+    ///   once at startup and then only toggled between collapsed and visible, so the transition would
+    ///   play once each and never again.
+    ///  </para>
+    ///  <para>
+    ///   Opacity and a render transform are both animated by the compositor, so this costs no layout
+    ///   passes and does not compete with the section's own first load.
+    ///  </para>
+    /// </remarks>
+    private static void PlaySectionEntrance(RepositoryPage page)
+    {
+        // Reused across switches: replacing it every time would discard the one the previous
+        // storyboard is still animating.
+        if (page.RenderTransform is not TranslateTransform transform)
+        {
+            transform = new TranslateTransform();
+            page.RenderTransform = transform;
+        }
+
+        CubicEase easing = new() { EasingMode = EasingMode.EaseOut };
+
+        DoubleAnimation fade = new()
+        {
+            From = 0,
+            To = 1,
+            Duration = SectionEntranceDuration,
+            EasingFunction = easing
+        };
+        Storyboard.SetTarget(fade, page);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+
+        DoubleAnimation rise = new()
+        {
+            From = 8,
+            To = 0,
+            Duration = SectionEntranceDuration,
+            EasingFunction = easing
+        };
+        Storyboard.SetTarget(rise, transform);
+        Storyboard.SetTargetProperty(rise, "Y");
+
+        Storyboard storyboard = new();
+        storyboard.Children.Add(fade);
+        storyboard.Children.Add(rise);
+        storyboard.Begin();
     }
 
     private async void OperationContinue_Click(object sender, RoutedEventArgs e) =>

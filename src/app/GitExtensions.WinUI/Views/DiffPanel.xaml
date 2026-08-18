@@ -22,7 +22,7 @@
         <Grid Grid.Row="0" Padding="12,8,12,8">
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
                         HorizontalAlignment="Left">
-                <FontIcon Glyph="&#xE7C3;" FontSize="14" VerticalAlignment="Center"
+                <FontIcon Glyph="&#xE7C3;" FontSize="{StaticResource IconSizeMedium}" VerticalAlignment="Center"
                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                           Visibility="{x:Bind Diff.ContentVisibility, Mode=OneWay}" />
 
@@ -66,14 +66,14 @@
                          arranged off the screen here. -->
                     <Grid ColumnDefinitions="44,44,Auto,*" Background="{x:Bind Background}">
                         <TextBlock Text="{x:Bind OldLineNumber}" Style="{StaticResource CodeTextStyle}"
-                                   FontSize="11" Opacity="0.45" TextAlignment="Right" Margin="0,0,6,0" />
+                                   FontSize="{StaticResource FontSizeCaption}" Opacity="0.45" TextAlignment="Right" Margin="0,0,6,0" />
                         <TextBlock Grid.Column="1" Text="{x:Bind NewLineNumber}"
                                    Style="{StaticResource CodeTextStyle}"
-                                   FontSize="11" Opacity="0.45" TextAlignment="Right" Margin="0,0,10,0" />
+                                   FontSize="{StaticResource FontSizeCaption}" Opacity="0.45" TextAlignment="Right" Margin="0,0,10,0" />
 
                         <!-- Only hunk headers carry this; every other row collapses it to nothing. -->
                         <Button Grid.Column="2" Tag="{x:Bind Hunk}" Click="HunkAction_Click"
-                                Padding="8,0" FontSize="11" Margin="0,0,10,0"
+                                Padding="8,0" FontSize="{StaticResource FontSizeCaption}" Margin="0,0,10,0"
                                 Visibility="{x:Bind HunkActionVisibility}"
                                 Content="{Binding ElementName=PanelRoot, Path=Diff.HunkActionLabel}"
                                 ToolTipService.ToolTip="{x:Bind HunkSummary}" />
@@ -98,7 +98,7 @@
                     <Grid ColumnDefinitions="*,1,*" ColumnSpacing="6">
                         <Grid ColumnDefinitions="44,*" Background="{x:Bind Left.Background}">
                             <TextBlock Text="{x:Bind Left.OldLineNumber}" Style="{StaticResource CodeTextStyle}"
-                                       FontSize="11" Opacity="0.45" TextAlignment="Right" Margin="0,0,8,0" />
+                                       FontSize="{StaticResource FontSizeCaption}" Opacity="0.45" TextAlignment="Right" Margin="0,0,8,0" />
                             <TextBlock Grid.Column="1" controls:DiffTextBehavior.Line="{x:Bind Left}"
                                        Style="{StaticResource CodeTextStyle}"
                                        IsTextSelectionEnabled="True" />
@@ -106,7 +106,7 @@
                         <Border Grid.Column="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" />
                         <Grid Grid.Column="2" ColumnDefinitions="44,*" Background="{x:Bind Right.Background}">
                             <TextBlock Text="{x:Bind Right.NewLineNumber}" Style="{StaticResource CodeTextStyle}"
-                                       FontSize="11" Opacity="0.45" TextAlignment="Right" Margin="0,0,8,0" />
+                                       FontSize="{StaticResource FontSizeCaption}" Opacity="0.45" TextAlignment="Right" Margin="0,0,8,0" />
                             <TextBlock Grid.Column="1" controls:DiffTextBehavior.Line="{x:Bind Right}"
                                        Style="{StaticResource CodeTextStyle}"
                                        IsTextSelectionEnabled="True" />

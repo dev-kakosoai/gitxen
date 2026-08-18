@@ -44,6 +44,9 @@ public partial class App : Application
         // default colours and then visibly change once the saved theme was applied.
         SessionState state = SessionStore.Load();
         AppOptions.Apply(state);
+
+        // Before any window: pages resolve the dense-row style as they are parsed.
+        DensityService.Apply();
         ThemeService.Initialize();
 
         MainWindow window = new(_serviceContainer);

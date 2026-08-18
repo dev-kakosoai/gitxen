@@ -22,6 +22,12 @@ public sealed partial class ChangesView : RepositoryPage
     public ChangesView()
     {
         InitializeComponent();
+
+        // The pane opens at whatever width it was last dragged to, on every tab. SizeChanged is the
+        // write-back: the pane's width only ever changes when the splitter drags it, so anything the
+        // event reports is a deliberate choice worth keeping.
+        StagingPane.Width = AppOptions.StagingPaneWidth;
+        StagingPane.SizeChanged += (_, e) => AppOptions.StagingPaneWidth = e.NewSize.Width;
     }
 
     /// <summary>The diff currently subscribed to, so the handler is not attached twice.</summary>

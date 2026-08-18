@@ -17,9 +17,9 @@
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Button Content="Update all" Click="UpdateAll_Click" />
                 <Button Content="Sync" Click="Sync_Click"
-                        ToolTipService.ToolTip="Re-read submodule URLs from .gitmodules" />
+                        AutomationProperties.Name="Refresh submodules" ToolTipService.ToolTip="Re-read submodule URLs from .gitmodules" />
                 <Button Click="Refresh_Click" ToolTipService.ToolTip="Refresh">
-                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                    <FontIcon Glyph="&#xE72C;" FontSize="{StaticResource IconSizeMedium}" />
                 </Button>
             </StackPanel>
         </StackPanel>
@@ -36,6 +36,14 @@
                 Visibility="{x:Bind conv:Show.IfAny(Tab.Submodules.Count), Mode=OneWay}">
             <ListView ItemsSource="{x:Bind Tab.Submodules, Mode=OneWay}" SelectionMode="Single" Padding="4"
                       ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+                <!-- Rows animate in as the listing refreshes; supported inline only,
+                     a Transitions-typed style setter fails XAML parsing at runtime. -->
+                <ListView.ItemContainerTransitions>
+                    <TransitionCollection>
+                        <AddDeleteThemeTransition />
+                        <ReorderThemeTransition />
+                    </TransitionCollection>
+                </ListView.ItemContainerTransitions>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:SubmoduleInfo">
                         <!-- Fixed widths rather than a star column: see BranchesView. -->
@@ -48,23 +56,23 @@
                             </Grid.ContextFlyout>
 
                             <!-- The state marker is the reason to look at this page at all, so it leads. -->
-                            <FontIcon Glyph="&#xE7BA;" FontSize="13" VerticalAlignment="Center"
+                            <FontIcon Glyph="&#xE7BA;" FontSize="{StaticResource IconSizeSmall}" VerticalAlignment="Center"
                                       Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                       Visibility="{x:Bind conv:Show.If(NeedsAttention)}" />
-                            <FontIcon Glyph="&#xE73E;" FontSize="13" VerticalAlignment="Center"
+                            <FontIcon Glyph="&#xE73E;" FontSize="{StaticResource IconSizeSmall}" VerticalAlignment="Center"
                                       Foreground="{ThemeResource SystemFillColorSuccessBrush}"
                                       Visibility="{x:Bind conv:Show.IfNot(NeedsAttention)}" />
 
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="{x:Bind Path}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{x:Bind Described}" FontSize="11"
+                                <TextBlock Text="{x:Bind Described}" FontSize="{StaticResource FontSizeCaption}"
                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                            TextTrimming="CharacterEllipsis"
                                            Visibility="{x:Bind conv:Show.IfText(Described)}" />
                             </StackPanel>
 
                             <TextBlock Grid.Column="2" Text="{x:Bind StateText}"
-                                       Style="{StaticResource SecondaryTextStyle}" FontSize="11" />
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeCaption}" />
                             <TextBlock Grid.Column="3" Text="{x:Bind ShortHash}"
                                        Style="{StaticResource HashTextStyle}" />
                         </Grid>

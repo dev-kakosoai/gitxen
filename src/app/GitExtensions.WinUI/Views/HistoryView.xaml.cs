@@ -28,6 +28,10 @@ public sealed partial class HistoryView : RepositoryPage
     public HistoryView()
     {
         InitializeComponent();
+
+        // See ChangesView: the dragged width is an option shared by every tab, not per-repository state.
+        DetailsPane.Width = AppOptions.HistoryDetailsWidth;
+        DetailsPane.SizeChanged += (_, e) => AppOptions.HistoryDetailsWidth = e.NewSize.Width;
     }
 
     /// <summary>

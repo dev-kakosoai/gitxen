@@ -76,8 +76,8 @@
                         <TextBlock Text="Repositories" Style="{StaticResource SectionCaptionStyle}"
                                    VerticalAlignment="Center" />
                         <Button Click="AddRepository_Click" Padding="6,2"
-                                ToolTipService.ToolTip="Open a repository (Ctrl+O)">
-                            <FontIcon Glyph="&#xE710;" FontSize="11" />
+                                AutomationProperties.Name="Open a repository" ToolTipService.ToolTip="Open a repository (Ctrl+O)">
+                            <FontIcon Glyph="&#xE710;" FontSize="{StaticResource IconSizeSmall}" />
                         </Button>
                     </StackPanel>
 
@@ -87,7 +87,7 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Padding="10,7">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE80F;" FontSize="13" />
+                            <FontIcon Glyph="&#xE80F;" FontSize="{StaticResource IconSizeSmall}" />
                             <TextBlock Text="Home" />
                         </StackPanel>
                     </Button>
@@ -116,17 +116,17 @@
                                                         Visibility="{x:Bind ActionsVisibility}"
                                                         AutomationProperties.Name="Collapse or expand"
                                                         ToolTipService.ToolTip="Collapse or expand">
-                                                    <FontIcon Glyph="&#xE70D;" FontSize="9" />
+                                                    <FontIcon Glyph="&#xE70D;" FontSize="{StaticResource IconSizeTiny}" />
                                                 </Button>
                                                 <FontIcon Grid.Column="1" Glyph="{x:Bind Glyph, Mode=OneWay}"
-                                                          FontSize="12" VerticalAlignment="Center"
+                                                          FontSize="{StaticResource IconSizeSmall}" VerticalAlignment="Center"
                                                           Foreground="{x:Bind Accent, Mode=OneWay}" />
                                                 <TextBlock Grid.Column="2" Text="{x:Bind Name, Mode=OneWay}"
-                                                           FontSize="12" FontWeight="SemiBold"
+                                                           FontSize="{StaticResource FontSizeBody}" FontWeight="SemiBold"
                                                            VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Grid.Column="3" Text="{x:Bind CountText, Mode=OneWay}"
-                                                           FontSize="11" VerticalAlignment="Center"
+                                                           FontSize="{StaticResource FontSizeCaption}" VerticalAlignment="Center"
                                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
                                             </Grid>
                                         </Border>
@@ -144,21 +144,21 @@
                                             Background="{x:Bind Accent, Mode=OneWay}"
                                             Visibility="{x:Bind GroupVisibility, Mode=OneWay}" />
 
-                                    <FontIcon Grid.Column="1" Glyph="&#xE8B7;" FontSize="13"
+                                    <FontIcon Grid.Column="1" Glyph="&#xE8B7;" FontSize="{StaticResource IconSizeSmall}"
                                               VerticalAlignment="Center" />
 
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{x:Bind Description}" FontSize="11"
+                                        <TextBlock Text="{x:Bind Description}" FontSize="{StaticResource FontSizeCaption}"
                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
 
                                     <Button Grid.Column="3" Click="CloseRepository_Click" Tag="{x:Bind}"
-                                            Padding="6,2" FontSize="11" VerticalAlignment="Center"
-                                            ToolTipService.ToolTip="Close"
+                                            Padding="6,2" FontSize="{StaticResource FontSizeCaption}" VerticalAlignment="Center"
+                                            AutomationProperties.Name="Close tab" ToolTipService.ToolTip="Close"
                                             Visibility="{x:Bind conv:Show.If(IsClosable)}">
-                                        <FontIcon Glyph="&#xE711;" FontSize="10" />
+                                        <FontIcon Glyph="&#xE711;" FontSize="{StaticResource IconSizeTiny}" />
                                     </Button>
                                 </Grid>
                             </DataTemplate>

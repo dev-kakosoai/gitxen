@@ -17,8 +17,8 @@
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Button Content="Keep ours for all" Click="TakeAllOurs_Click" />
                 <Button Content="Keep theirs for all" Click="TakeAllTheirs_Click" />
-                <Button Click="Refresh_Click" ToolTipService.ToolTip="Re-read the conflicts">
-                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                <Button Click="Refresh_Click" AutomationProperties.Name="Refresh conflicts" ToolTipService.ToolTip="Re-read the conflicts">
+                    <FontIcon Glyph="&#xE72C;" FontSize="{StaticResource IconSizeMedium}" />
                 </Button>
             </StackPanel>
         </StackPanel>
@@ -42,38 +42,46 @@
                 Visibility="{x:Bind ListVisibility}">
             <ListView ItemsSource="{x:Bind Tab.Conflicts, Mode=OneWay}" SelectionMode="Single" Padding="4"
                       ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+                <!-- Rows animate in as the listing refreshes; supported inline only,
+                     a Transitions-typed style setter fails XAML parsing at runtime. -->
+                <ListView.ItemContainerTransitions>
+                    <TransitionCollection>
+                        <AddDeleteThemeTransition />
+                        <ReorderThemeTransition />
+                    </TransitionCollection>
+                </ListView.ItemContainerTransitions>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:ConflictedFile">
                         <!-- Fixed widths rather than a star column: a column after one is arranged
                              off the screen here. -->
                         <Grid ColumnDefinitions="Auto,380,260,Auto" ColumnSpacing="14" Padding="4,6">
-                            <FontIcon Glyph="&#xE7BA;" FontSize="14" VerticalAlignment="Center"
+                            <FontIcon Glyph="&#xE7BA;" FontSize="{StaticResource IconSizeMedium}" VerticalAlignment="Center"
                                       Foreground="{ThemeResource SystemFillColorCautionBrush}" />
 
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="{x:Bind FileName}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{x:Bind Directory}" FontSize="11"
+                                <TextBlock Text="{x:Bind Directory}" FontSize="{StaticResource FontSizeCaption}"
                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
 
                             <TextBlock Grid.Column="2" Text="{x:Bind Description}"
-                                       Style="{StaticResource SecondaryTextStyle}" FontSize="12"
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeBody}"
                                        TextWrapping="Wrap" />
 
                             <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
                                         VerticalAlignment="Center">
                                 <Button Content="{x:Bind OursLabel}" Tag="{x:Bind}" Click="TakeOurs_Click"
-                                        Padding="10,3" FontSize="12" />
+                                        Padding="10,3" FontSize="{StaticResource FontSizeBody}" />
                                 <Button Content="{x:Bind TheirsLabel}" Tag="{x:Bind}" Click="TakeTheirs_Click"
-                                        Padding="10,3" FontSize="12" />
+                                        Padding="10,3" FontSize="{StaticResource FontSizeBody}" />
                                 <Button Content="Merge tool" Tag="{x:Bind}" Click="MergeTool_Click"
-                                        Padding="10,3" FontSize="12"
+                                        Padding="10,3" FontSize="{StaticResource FontSizeBody}"
                                         Visibility="{x:Bind MergeToolVisibility}" />
                                 <Button Content="View" Tag="{x:Bind}" Click="View_Click"
-                                        Padding="10,3" FontSize="12" />
+                                        Padding="10,3" FontSize="{StaticResource FontSizeBody}" />
                                 <Button Content="Mark resolved" Tag="{x:Bind}" Click="MarkResolved_Click"
-                                        Padding="10,3" FontSize="12" />
+                                        Padding="10,3" FontSize="{StaticResource FontSizeBody}" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>

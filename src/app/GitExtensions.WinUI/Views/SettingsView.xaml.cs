@@ -42,9 +42,24 @@ public sealed partial class SettingsView : RepositoryPage
             ?? themes[0];
         CommitsBox.Value = AppOptions.MaxCommits;
         DiffLinesBox.Value = AppOptions.MaxDiffLines;
+        DensityBox.SelectedIndex = AppOptions.Density == UiDensity.Compact ? 1 : 0;
 
         _isLoading = false;
         return Task.CompletedTask;
+    }
+
+    private void Density_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        AppOptions.Density = DensityBox.SelectedIndex == 1 ? UiDensity.Compact : UiDensity.Comfortable;
+
+        // Replaces the shared row style for pages parsed from here on; the commit graph picks the
+        // new row height up as each list refreshes.
+        DensityService.Apply();
     }
 
     private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)

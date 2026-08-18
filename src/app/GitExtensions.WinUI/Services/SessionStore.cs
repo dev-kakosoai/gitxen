@@ -37,6 +37,13 @@ public sealed class SessionState
     /// <summary>Width of the repository column, in effective pixels.</summary>
     public double SidebarWidth { get; set; } = 280;
 
+    /// <summary>Dragged pane widths, shared by every tab. See AppOptions for why they are not per-repository.</summary>
+    public double StagingPaneWidth { get; set; } = 400;
+
+    public double HistoryDetailsWidth { get; set; } = 380;
+
+    public UiDensity Density { get; set; } = UiDensity.Comfortable;
+
     public WindowBounds? Window { get; set; }
 
     /// <summary>

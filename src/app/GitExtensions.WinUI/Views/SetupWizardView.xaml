@@ -48,7 +48,7 @@
                             <Border Style="{StaticResource CardBorderStyle}" Padding="16">
                                 <StackPanel Spacing="8">
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <FontIcon x:Name="GitStatusGlyph" Glyph="&#xE73E;" FontSize="16"
+                                        <FontIcon x:Name="GitStatusGlyph" Glyph="&#xE73E;" FontSize="{StaticResource IconSizeLarge}"
                                                   VerticalAlignment="Center" />
                                         <TextBlock x:Name="GitStatusText" VerticalAlignment="Center"
                                                    Text="Checking for git..." FontWeight="SemiBold" />

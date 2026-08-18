@@ -31,12 +31,12 @@
                                  arranged off the screen here. -->
                             <Grid ColumnDefinitions="110,330,Auto" ColumnSpacing="12">
                                 <TextBlock Text="{x:Bind Category}"
-                                           Style="{StaticResource SecondaryTextStyle}" FontSize="11" />
+                                           Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeCaption}" />
                                 <TextBlock Grid.Column="1" Text="{x:Bind Title}"
                                            VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
                                 <TextBlock Grid.Column="2" Text="{x:Bind Detail}"
-                                           Style="{StaticResource SecondaryTextStyle}" FontSize="11" />
+                                           Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeCaption}" />
                             </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>

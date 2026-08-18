@@ -15,8 +15,8 @@
                            Style="{StaticResource PageSubtitleStyle}" />
             </StackPanel>
             <Button Click="Refresh_Click" VerticalAlignment="Center"
-                    ToolTipService.ToolTip="Refresh">
-                <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                    AutomationProperties.Name="Refresh" ToolTipService.ToolTip="Refresh">
+                <FontIcon Glyph="&#xE72C;" FontSize="{StaticResource IconSizeMedium}" />
             </Button>
         </StackPanel>
 
@@ -32,6 +32,14 @@
                 Visibility="{x:Bind conv:Show.IfAny(Tab.Tags.Count), Mode=OneWay}">
             <ListView ItemsSource="{x:Bind Tab.Tags, Mode=OneWay}" SelectionMode="Single" Padding="4"
                       ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+                <!-- Rows animate in as the listing refreshes; supported inline only,
+                     a Transitions-typed style setter fails XAML parsing at runtime. -->
+                <ListView.ItemContainerTransitions>
+                    <TransitionCollection>
+                        <AddDeleteThemeTransition />
+                        <ReorderThemeTransition />
+                    </TransitionCollection>
+                </ListView.ItemContainerTransitions>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:TagInfo">
                         <!-- Fixed widths rather than a star column: see BranchesView. -->
@@ -50,24 +58,24 @@
                                 </MenuFlyout>
                             </Grid.ContextFlyout>
 
-                            <FontIcon Glyph="&#xE8EC;" FontSize="13" VerticalAlignment="Center"
+                            <FontIcon Glyph="&#xE8EC;" FontSize="{StaticResource IconSizeSmall}" VerticalAlignment="Center"
                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{x:Bind Subject}" FontSize="11"
+                                <TextBlock Text="{x:Bind Subject}" FontSize="{StaticResource FontSizeCaption}"
                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                            TextTrimming="CharacterEllipsis"
                                            Visibility="{x:Bind conv:Show.IfText(Subject)}" />
                             </StackPanel>
 
                             <TextBlock Grid.Column="2" Text="{x:Bind Kind}"
-                                       Style="{StaticResource SecondaryTextStyle}" FontSize="11" />
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeCaption}" />
                             <TextBlock Grid.Column="3" Text="{x:Bind ShortHash}"
                                        Style="{StaticResource HashTextStyle}" />
                             <TextBlock Grid.Column="4" Text="{x:Bind Date}"
-                                       Style="{StaticResource SecondaryTextStyle}" FontSize="12" />
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeBody}" />
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>

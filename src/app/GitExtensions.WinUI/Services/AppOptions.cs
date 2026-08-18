@@ -27,6 +27,16 @@ public enum AppTheme
     CyberpunkLight
 }
 
+/// <summary>How tightly the object lists pack their rows.</summary>
+public enum UiDensity
+{
+    /// <summary>The shipped spacing.</summary>
+    Comfortable,
+
+    /// <summary>Tighter rows: roughly a fifth more commits on the same screen.</summary>
+    Compact
+}
+
 /// <summary>How the open repositories are listed.</summary>
 public enum RepositoryLayout
 {
@@ -65,6 +75,22 @@ public static class AppOptions
     /// <summary>Tabs across the top, or a column down the left.</summary>
     public static RepositoryLayout Layout { get; set; } = RepositoryLayout.Tabs;
 
+    /// <summary>
+    ///  Width of the staging pane on the Changes page.
+    /// </summary>
+    /// <remarks>
+    ///  Pane widths are options rather than per-repository state: a splitter is dragged to suit the
+    ///  monitor and the reader, not the repository, so every tab shares one value. The clamps match
+    ///  the PaneSplitter Minimum/Maximum in the XAML that drags them.
+    /// </remarks>
+    public static double StagingPaneWidth { get; set; } = 400;
+
+    /// <summary>Width of the commit-details pane on the History page.</summary>
+    public static double HistoryDetailsWidth { get; set; } = 380;
+
+    /// <summary>Row spacing for the object lists and the commit graph.</summary>
+    public static UiDensity Density { get; set; } = UiDensity.Comfortable;
+
     public static void Apply(SessionState state)
     {
         // Guard against a hand-edited session file putting in something unusable.
@@ -73,6 +99,9 @@ public static class AppOptions
         Theme = state.Theme;
         AutoFetchMinutes = Math.Clamp(state.AutoFetchMinutes, 0, 240);
         Layout = state.Layout;
+        StagingPaneWidth = Math.Clamp(state.StagingPaneWidth, 300, 800);
+        HistoryDetailsWidth = Math.Clamp(state.HistoryDetailsWidth, 260, 900);
+        Density = state.Density;
     }
 
     public static void CopyTo(SessionState state)
@@ -82,5 +111,8 @@ public static class AppOptions
         state.Theme = Theme;
         state.AutoFetchMinutes = AutoFetchMinutes;
         state.Layout = Layout;
+        state.StagingPaneWidth = StagingPaneWidth;
+        state.HistoryDetailsWidth = HistoryDetailsWidth;
+        state.Density = Density;
     }
 }

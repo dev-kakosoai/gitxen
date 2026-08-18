@@ -30,16 +30,16 @@
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="{x:Bind FileName}" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{x:Bind Detail}" FontSize="11"
+                    <TextBlock Text="{x:Bind Detail}" FontSize="{StaticResource FontSizeCaption}"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                TextTrimming="CharacterEllipsis"
                                Visibility="{x:Bind DetailVisibility}" />
                 </StackPanel>
 
                 <Button Grid.Column="2" Click="ToggleStage_Click" Tag="{x:Bind}"
-                        Padding="6,2" FontSize="11"
-                        ToolTipService.ToolTip="Stage or unstage this file">
-                    <FontIcon Glyph="&#xE8AB;" FontSize="12" />
+                        Padding="6,2" FontSize="{StaticResource FontSizeCaption}"
+                        AutomationProperties.Name="Stage or unstage" ToolTipService.ToolTip="Stage or unstage this file">
+                    <FontIcon Glyph="&#xE8AB;" FontSize="{StaticResource IconSizeSmall}" />
                 </Button>
             </Grid>
         </DataTemplate>
@@ -78,7 +78,7 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <Button Grid.Column="1" Content="Stage all" Click="StageAll_Click"
-                            Padding="8,2" FontSize="12" />
+                            Padding="8,2" FontSize="{StaticResource FontSizeBody}" />
                 </Grid>
 
                 <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" MinHeight="90">
@@ -86,7 +86,16 @@
                               SelectedItem="{x:Bind Tab.Changes.SelectedUnstaged, Mode=TwoWay}"
                               ItemTemplate="{StaticResource ChangedFileTemplate}"
                               ItemContainerStyle="{StaticResource DenseListViewItemStyle}"
-                              SelectionMode="Single" Padding="4" />
+                              SelectionMode="Single" Padding="4">
+                        <!-- Rows animate in as the listing refreshes; supported inline only,
+                             a Transitions-typed style setter fails XAML parsing at runtime. -->
+                        <ListView.ItemContainerTransitions>
+                            <TransitionCollection>
+                                <AddDeleteThemeTransition />
+                                <ReorderThemeTransition />
+                            </TransitionCollection>
+                        </ListView.ItemContainerTransitions>
+                    </ListView>
                 </Border>
 
                 <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="2,14,2,6">
@@ -96,7 +105,7 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <Button Grid.Column="1" Content="Unstage all" Click="UnstageAll_Click"
-                            Padding="8,2" FontSize="12" />
+                            Padding="8,2" FontSize="{StaticResource FontSizeBody}" />
                 </Grid>
 
                 <Border Grid.Row="3" Style="{StaticResource CardBorderStyle}" MinHeight="90">
@@ -104,7 +113,16 @@
                               SelectedItem="{x:Bind Tab.Changes.SelectedStaged, Mode=TwoWay}"
                               ItemTemplate="{StaticResource ChangedFileTemplate}"
                               ItemContainerStyle="{StaticResource DenseListViewItemStyle}"
-                              SelectionMode="Single" Padding="4" />
+                              SelectionMode="Single" Padding="4">
+                        <!-- Rows animate in as the listing refreshes; supported inline only,
+                             a Transitions-typed style setter fails XAML parsing at runtime. -->
+                        <ListView.ItemContainerTransitions>
+                            <TransitionCollection>
+                                <AddDeleteThemeTransition />
+                                <ReorderThemeTransition />
+                            </TransitionCollection>
+                        </ListView.ItemContainerTransitions>
+                    </ListView>
                 </Border>
 
                 <Border Grid.Row="4" Style="{StaticResource CardBorderStyle}"
@@ -123,9 +141,9 @@
                              rule, but a body with no blank line after the subject is a real mistake. -->
                         <Grid ColumnDefinitions="60,320" ColumnSpacing="10">
                             <TextBlock Text="{x:Bind Tab.Changes.SubjectLength, Mode=OneWay}"
-                                       Style="{StaticResource SecondaryTextStyle}" FontSize="11" />
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeCaption}" />
                             <TextBlock Grid.Column="1" Text="{x:Bind Tab.Changes.MessageHint, Mode=OneWay}"
-                                       Style="{StaticResource SecondaryTextStyle}" FontSize="11"
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="{StaticResource FontSizeCaption}"
                                        TextWrapping="Wrap" />
                         </Grid>
 
