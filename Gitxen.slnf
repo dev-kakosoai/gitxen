@@ -1,0 +1,12 @@
+{
+  "solution": {
+    "path": "GitExtensions.slnx",
+    "projects": [
+      "src\\app\\GitExtensions.WinUI\\GitExtensions.WinUI.csproj",
+      "src\\app\\GitCommands\\GitCommands.csproj",
+      "src\\app\\GitExtUtils\\GitExtUtils.csproj",
+      "src\\app\\GitExtensions.Extensibility\\GitExtensions.Extensibility.csproj",
+      "src\\plugins\\GitUIPluginInterfaces\\GitUIPluginInterfaces.csproj"
+    ]
+  }
+}

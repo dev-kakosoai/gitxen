@@ -107,6 +107,10 @@ the installer and publish pipeline (no `BuildDependency` in `GitExtensions.slnx`
 - Build/run: `dotnet build src/app/GitExtensions.WinUI/GitExtensions.WinUI.csproj -c Debug -p:Platform=x64`
   (x64-only; the rest of the solution is AnyCPU). Requires a real Windows SDK install — the native
   WinUI toolchain (`cswinrt.exe`, PRI/MSIX tasks) needs the `KitsRoot10` registry value present.
+- For iteration, prefer the repo-root solution filters over a bare `dotnet build` (which compiles all
+  ~50 projects and pays ~35s of overhead even with no changes): `dotnet build Gitxen.slnf` builds this
+  app plus its four backend dependencies; `dotnet test Gitxen.Tests.slnf` runs the backend tests
+  covering them. Save the full `dotnet build` / `dotnet test` for pre-push validation.
 - Bootstrap mirrors the minimum viable part of `src/app/GitExtensions/Program.cs`: capture a
   `JoinableTaskContext` for `ThreadHelper`, register services (`Bootstrap/ServiceContainerRegistry.cs`
   replicates the app-level + `GitCommands` registrations, skipping `GitUI`'s), then `AppSettings.LoadSettings()`.
