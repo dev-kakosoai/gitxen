@@ -318,6 +318,33 @@ public sealed partial class RepositoryView : UserControl
         await selected.ActivateAsync();
     }
 
+    private async void OperationContinue_Click(object sender, RoutedEventArgs e) =>
+        await RunAsync(tab => tab.ResolveOperationAsync("continue"));
+
+    private async void OperationSkip_Click(object sender, RoutedEventArgs e) =>
+        await RunAsync(tab => tab.ResolveOperationAsync("skip"));
+
+    /// <summary>Aborting returns the repository to where the operation started, so it is confirmed.</summary>
+    private async void OperationAbort_Click(object sender, RoutedEventArgs e)
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        if (await ConfirmTextAsync(
+            $"Abort the {tab.Operation.CommandName}?",
+            "This returns the repository to where the operation started. Work you have already "
+                + "committed as part of it is discarded.",
+            "Abort"))
+        {
+            await RunAsync(t => t.ResolveOperationAsync("abort"));
+        }
+    }
+
+    /// <summary>Takes the user to the page that fixes the missing identity.</summary>
+    private async void OpenGitConfig_Click(object sender, RoutedEventArgs e) =>
+        await NavigateAsync("gitconfig", GitConfigPage);
     private async void Refresh_Click(object sender, RoutedEventArgs e)
     {
         if (Tab is RepositoryTabViewModel tab)
@@ -468,27 +495,6 @@ public sealed partial class RepositoryView : UserControl
                 ? "Nothing is waiting to be resolved."
                 : string.Join(Environment.NewLine, conflicts));
     }
-
-    private async void RebaseContinue_Click(object sender, RoutedEventArgs e) =>
-        await RunAsync(tab => tab.ContinueOperationAsync("rebase", "continue"));
-
-    private async void RebaseSkip_Click(object sender, RoutedEventArgs e) =>
-        await RunAsync(tab => tab.ContinueOperationAsync("rebase", "skip"));
-
-    private async void RebaseAbort_Click(object sender, RoutedEventArgs e) =>
-        await RunAsync(tab => tab.ContinueOperationAsync("rebase", "abort"));
-
-    private async void MergeAbort_Click(object sender, RoutedEventArgs e) =>
-        await RunAsync(tab => tab.ContinueOperationAsync("merge", "abort"));
-
-    private async void CherryPickContinue_Click(object sender, RoutedEventArgs e) =>
-        await RunAsync(tab => tab.ContinueOperationAsync("cherry-pick", "continue"));
-
-    private async void CherryPickAbort_Click(object sender, RoutedEventArgs e) =>
-        await RunAsync(tab => tab.ContinueOperationAsync("cherry-pick", "abort"));
-
-    private async void RevertAbort_Click(object sender, RoutedEventArgs e) =>
-        await RunAsync(tab => tab.ContinueOperationAsync("revert", "abort"));
 
     private async Task RunAsync(Func<RepositoryTabViewModel, Task<Services.GitOperationResult>> operation)
     {

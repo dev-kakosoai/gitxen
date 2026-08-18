@@ -112,7 +112,22 @@
                     <StackPanel Spacing="10">
                         <TextBox PlaceholderText="Commit message"
                                  AcceptsReturn="True" TextWrapping="Wrap" Height="96"
-                                 Text="{x:Bind Tab.Changes.Message, Mode=TwoWay}" />
+                                 Text="{x:Bind Tab.Changes.Message, Mode=TwoWay}">
+                            <TextBox.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="Enter"
+                                                     Invoked="CommitAccelerator_Invoked" />
+                            </TextBox.KeyboardAccelerators>
+                        </TextBox>
+
+                        <!-- A counter and a hint rather than validation: 50/72 is a convention, not a
+                             rule, but a body with no blank line after the subject is a real mistake. -->
+                        <Grid ColumnDefinitions="60,320" ColumnSpacing="10">
+                            <TextBlock Text="{x:Bind Tab.Changes.SubjectLength, Mode=OneWay}"
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="11" />
+                            <TextBlock Grid.Column="1" Text="{x:Bind Tab.Changes.MessageHint, Mode=OneWay}"
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="11"
+                                       TextWrapping="Wrap" />
+                        </Grid>
 
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">

@@ -33,6 +33,15 @@ public static class AppOptions
 
     public static AppTheme Theme { get; set; } = AppTheme.System;
 
+    /// <summary>
+    ///  Minutes between background fetches; 0 turns them off.
+    /// </summary>
+    /// <remarks>
+    ///  Ahead/behind counts come from the remote-tracking refs, which only move when something
+    ///  fetches. Without this the toolbar reports "up to date" indefinitely while the remote moves on.
+    /// </remarks>
+    public static int AutoFetchMinutes { get; set; } = 10;
+
     /// <summary>Tabs across the top, or a column down the left.</summary>
     public static RepositoryLayout Layout { get; set; } = RepositoryLayout.Tabs;
 
@@ -42,6 +51,7 @@ public static class AppOptions
         MaxCommits = Math.Clamp(state.MaxCommits, 100, 50_000);
         MaxDiffLines = Math.Clamp(state.MaxDiffLines, 100, 200_000);
         Theme = state.Theme;
+        AutoFetchMinutes = Math.Clamp(state.AutoFetchMinutes, 0, 240);
         Layout = state.Layout;
     }
 
@@ -50,6 +60,7 @@ public static class AppOptions
         state.MaxCommits = MaxCommits;
         state.MaxDiffLines = MaxDiffLines;
         state.Theme = Theme;
+        state.AutoFetchMinutes = AutoFetchMinutes;
         state.Layout = Layout;
     }
 }

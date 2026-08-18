@@ -2,6 +2,7 @@ using System.ComponentModel.Design;
 using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
 using GitExtensions.WinUI.Views;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -24,6 +25,15 @@ namespace GitExtensions.WinUI;
 /// </remarks>
 public sealed partial class MainWindow : Window
 {
+    /// <summary>
+    ///  Drives the periodic background fetch.
+    /// </summary>
+    /// <remarks>
+    ///  Owned by the window rather than by each repository so that the interval is applied once and
+    ///  every open tab is refreshed on the same tick, instead of each keeping its own timer running.
+    /// </remarks>
+    private DispatcherQueueTimer? _autoFetchTimer;
+
     public MainWindow(ServiceContainer serviceContainer)
     {
         ViewModel = new MainViewModel(serviceContainer);
@@ -63,11 +73,38 @@ public sealed partial class MainWindow : Window
             await ViewModel.RestoreSessionAsync(state);
 
             SyncModeBar();
+            StartAutoFetch();
             await Home.RefreshAsync();
         }
         catch (Exception ex)
         {
             SessionStore.LogRestoreFailure(ex);
+        }
+    }
+
+    private void StartAutoFetch()
+    {
+        _autoFetchTimer?.Stop();
+
+        if (AppOptions.AutoFetchMinutes <= 0)
+        {
+            return;
+        }
+
+        _autoFetchTimer = DispatcherQueue.CreateTimer();
+        _autoFetchTimer.Interval = TimeSpan.FromMinutes(AppOptions.AutoFetchMinutes);
+
+        // Not an async lambda: an exception escaping a void-returning delegate would crash the
+        // process, so the work goes through a method that handles its own failures.
+        _autoFetchTimer.Tick += (_, _) => _ = FetchAllQuietlyAsync();
+        _autoFetchTimer.Start();
+    }
+
+    private async Task FetchAllQuietlyAsync()
+    {
+        foreach (RepositoryTabViewModel tab in ViewModel.Repositories.ToList())
+        {
+            await tab.AutoFetchAsync();
         }
     }
 
@@ -278,6 +315,63 @@ public sealed partial class MainWindow : Window
         {
             await Repository.ShowPaletteAsync();
         }
+    }
+
+    /// <summary>
+    ///  Lists the keyboard shortcuts.
+    /// </summary>
+    /// <remarks>
+    ///  Shortcuts that cannot be discovered are shortcuts nobody uses. F1 rather than the more
+    ///  fashionable Ctrl+/ because the latter is not a stable key across keyboard layouts.
+    /// </remarks>
+    private async void ShortcutsAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+
+        (string Keys, string Action)[] shortcuts =
+        [
+            ("Ctrl+O / Ctrl+T", "Open a repository"),
+            ("Ctrl+W", "Close the current repository"),
+            ("Ctrl+R", "Reload the current repository"),
+            ("Ctrl+Shift+P", "Command palette"),
+            ("Ctrl+Enter", "Commit (on the Changes page)"),
+            ("Ctrl+F", "Filter commits (on the History page)"),
+            ("F1", "This list"),
+            ("Escape", "Leave Zen mode")
+        ];
+
+        StackPanel panel = new() { Spacing = 8, Width = 420 };
+
+        foreach ((string keys, string action) in shortcuts)
+        {
+            Grid row = new() { ColumnSpacing = 16 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) });
+
+            TextBlock keyText = new()
+            {
+                Text = keys,
+                FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+                FontSize = 12
+            };
+
+            TextBlock actionText = new() { Text = action };
+            Grid.SetColumn(actionText, 1);
+
+            row.Children.Add(keyText);
+            row.Children.Add(actionText);
+            panel.Children.Add(row);
+        }
+
+        ContentDialog dialog = new()
+        {
+            Title = "Keyboard shortcuts",
+            Content = panel,
+            CloseButtonText = "Close",
+            XamlRoot = RootGrid.XamlRoot
+        };
+
+        await dialog.ShowAsync();
     }
 
     private void ModeBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) =>

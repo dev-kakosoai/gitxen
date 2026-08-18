@@ -63,6 +63,8 @@ public sealed class RepositoryTabViewModel : ShellTab
     private bool _isBusy;
     private string? _selectedBranch;
     private bool _suppressBranchCheckout;
+    private RepositoryOperation _operation = RepositoryOperation.None;
+    private bool _needsIdentity;
     private HostedRepository? _host;
     private CommitRowViewModel? _selectedCommit;
     private CommitRowViewModel? _compareTarget;
@@ -124,6 +126,39 @@ public sealed class RepositoryTabViewModel : ShellTab
     public ObservableCollection<GitConfigEntry> LocalConfig { get; } = [];
 
     public ObservableCollection<GitConfigEntry> GlobalConfig { get; } = [];
+
+    /// <summary>The paused merge, rebase, cherry-pick, revert or bisect, if there is one.</summary>
+    public RepositoryOperation Operation
+    {
+        get => _operation;
+        private set
+        {
+            if (SetProperty(ref _operation, value))
+            {
+                OnPropertyChanged(nameof(HasOperation));
+            }
+        }
+    }
+
+    public bool HasOperation => Operation.IsInProgress;
+
+    /// <summary>
+    ///  Set when no committer identity is configured, which makes every commit fail with an error
+    ///  that does not say where to fix it.
+    /// </summary>
+    public bool NeedsIdentity
+    {
+        get => _needsIdentity;
+        private set
+        {
+            if (SetProperty(ref _needsIdentity, value))
+            {
+                OnPropertyChanged(nameof(IdentityWarningVisibility));
+            }
+        }
+    }
+
+    public Visibility IdentityWarningVisibility => NeedsIdentity ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>
     ///  Where this repository lives online, from its remote URL, or null when it has no remote or the
@@ -797,6 +832,7 @@ public sealed class RepositoryTabViewModel : ShellTab
                 Branch = await Task.Run(_loader.GetCurrentBranch, cts.Token);
                 _refsByCommit = await Task.Run(_loader.GetRefsByCommit, cts.Token);
                 await ResolveHostAsync(cts.Token);
+                await RefreshRepositoryStateAsync(cts.Token);
                 await RefreshBranchesAsync(cts.Token);
                 await AddWorkingDirectoryRowAsync(cts.Token);
             }
@@ -1031,6 +1067,60 @@ public sealed class RepositoryTabViewModel : ShellTab
         RemoteInfo? preferred = remotes.FirstOrDefault(remote => remote.Name == "origin") ?? remotes.FirstOrDefault();
 
         Host = preferred is null ? null : GitHostLinks.Parse(preferred.FetchUrl);
+    }
+
+    /// <summary>
+    ///  Re-reads the things that are true of the repository as a whole rather than of one commit: a
+    ///  paused operation, and whether commits can be made at all.
+    /// </summary>
+    private async Task RefreshRepositoryStateAsync(CancellationToken cancellationToken)
+    {
+        Operation = await Task.Run(_loader.GetCurrentOperation, cancellationToken);
+
+        (string name, string email) = await Task.Run(_loader.GetEffectiveIdentity, cancellationToken);
+        NeedsIdentity = name.Length == 0 || email.Length == 0;
+    }
+
+    /// <summary>Continue, skip or abort whatever is paused, using that operation's own subcommand.</summary>
+    public Task<GitOperationResult> ResolveOperationAsync(string action)
+    {
+        string command = Operation.CommandName;
+
+        return command.Length == 0
+            ? Task.FromResult(new GitOperationResult("Resolve", false, "Nothing is in progress."))
+            : RunOperationAsync(loader => loader.ContinueOperation(command, action));
+    }
+
+    /// <summary>
+    ///  Fetches in the background so the ahead/behind counts mean something.
+    /// </summary>
+    /// <remarks>
+    ///  Those counts come from the remote-tracking refs, which only move when something fetches — so
+    ///  without this the toolbar can report "up to date" indefinitely while the remote moves on.
+    ///  Skipped while another operation is running, and it refreshes only the branch state rather than
+    ///  reloading the commit list, so it never disturbs what is on screen.
+    /// </remarks>
+    public async Task AutoFetchAsync()
+    {
+        if (IsBusy || IsLoading)
+        {
+            return;
+        }
+
+        try
+        {
+            GitOperationResult result = await Task.Run(_loader.FetchQuietly);
+
+            if (result.Succeeded)
+            {
+                await RefreshBranchesAsync(CancellationToken.None);
+            }
+        }
+        catch (Exception)
+        {
+            // A background fetch failing is not worth telling anyone about: no network, no remote,
+            // or credentials needed. The next manual fetch will say so properly.
+        }
     }
 
     private async Task LoadChangedFilesAsync(CommitRowViewModel? commit)

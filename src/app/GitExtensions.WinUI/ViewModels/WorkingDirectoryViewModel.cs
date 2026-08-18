@@ -98,7 +98,43 @@ public sealed class WorkingDirectoryViewModel : ObservableObject
             if (SetProperty(ref _message, value))
             {
                 OnPropertyChanged(nameof(CanCommit));
+                OnPropertyChanged(nameof(SubjectLength));
+                OnPropertyChanged(nameof(MessageHint));
             }
+        }
+    }
+
+    /// <summary>
+    ///  Length of the first line, which is what tools and hosting services show as the subject.
+    /// </summary>
+    public int SubjectLength => Message.Split('\n', 2)[0].TrimEnd('\r').Length;
+
+    /// <summary>
+    ///  Advice on the message being written, or empty when there is nothing worth saying.
+    /// </summary>
+    /// <remarks>
+    ///  The 50/72 convention is a guideline, not a rule, so this is a hint beside a counter rather
+    ///  than a validation that blocks the commit. What it is really there for is the second line: a
+    ///  subject running straight into a body with no blank line between them is a genuine mistake,
+    ///  because git then treats the whole thing as one long subject.
+    /// </remarks>
+    public string MessageHint
+    {
+        get
+        {
+            string[] lines = Message.Split('\n');
+
+            if (lines.Length > 1 && lines[1].TrimEnd('\r').Length > 0)
+            {
+                return "Leave a blank line after the subject, or git treats it all as the subject.";
+            }
+
+            if (SubjectLength > 72)
+            {
+                return "Subject is long; most tools truncate it.";
+            }
+
+            return "";
         }
     }
 

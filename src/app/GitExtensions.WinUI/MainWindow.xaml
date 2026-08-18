@@ -23,6 +23,7 @@
             <!-- Zen is deliberately undiscoverable: no button, hotkey only. -->
             <KeyboardAccelerator Modifiers="Control,Shift" Key="Z" Invoked="ZenAccelerator_Invoked" />
             <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
+            <KeyboardAccelerator Key="F1" Invoked="ShortcutsAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <!--

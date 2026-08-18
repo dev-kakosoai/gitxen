@@ -3,6 +3,7 @@ using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace GitExtensions.WinUI.Views;
@@ -124,6 +125,17 @@ public sealed partial class ChangesView : RepositoryPage
         if (Tab is RepositoryTabViewModel tab)
         {
             await tab.Changes.PrepareAmendAsync();
+        }
+    }
+
+    /// <summary>Ctrl+Enter commits from the message box, the shortcut every git client has.</summary>
+    private async void CommitAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+
+        if (Tab is RepositoryTabViewModel tab && tab.Changes.CanCommit)
+        {
+            tab.Report(await tab.Changes.CommitAsync());
         }
     }
 

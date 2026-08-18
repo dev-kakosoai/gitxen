@@ -26,6 +26,8 @@ public sealed class SessionState
 
     public RepositoryLayout Layout { get; set; } = RepositoryLayout.Tabs;
 
+    public int AutoFetchMinutes { get; set; } = 10;
+
     public WindowBounds? Window { get; set; }
 }
 

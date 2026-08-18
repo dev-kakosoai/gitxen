@@ -134,7 +134,7 @@
             pages' left margin and scrolls with nothing — the header area adds its own padding that does
             not line up with the section titles underneath it.
         -->
-        <Grid RowDefinitions="Auto,Auto,*">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
             <!--
                 Every action sits in one left-aligned run rather than being split across a star column
                 to the window's right edge: content placed at the far right of this bar does not paint,
@@ -195,32 +195,6 @@
                         <FontIcon Glyph="&#xE72C;" FontSize="14" />
                     </Button>
 
-                    <!-- Merge, rebase and cherry-pick all stop mid-way on conflict; this is where you
-                         pick the operation back up rather than hunting through a menu. -->
-                    <DropDownButton Content="In progress"
-                                    ToolTipService.ToolTip="Continue, skip or abort a paused operation">
-                        <DropDownButton.Flyout>
-                            <MenuFlyout Placement="Bottom">
-                                <MenuFlyoutItem Text="Show conflicted files" Click="ShowConflicts_Click" />
-                                <MenuFlyoutSeparator />
-                                <MenuFlyoutSubItem Text="Rebase">
-                                    <MenuFlyoutItem Text="Continue" Click="RebaseContinue_Click" />
-                                    <MenuFlyoutItem Text="Skip this commit" Click="RebaseSkip_Click" />
-                                    <MenuFlyoutItem Text="Abort" Click="RebaseAbort_Click" />
-                                </MenuFlyoutSubItem>
-                                <MenuFlyoutSubItem Text="Merge">
-                                    <MenuFlyoutItem Text="Abort" Click="MergeAbort_Click" />
-                                </MenuFlyoutSubItem>
-                                <MenuFlyoutSubItem Text="Cherry-pick">
-                                    <MenuFlyoutItem Text="Continue" Click="CherryPickContinue_Click" />
-                                    <MenuFlyoutItem Text="Abort" Click="CherryPickAbort_Click" />
-                                </MenuFlyoutSubItem>
-                                <MenuFlyoutSubItem Text="Revert">
-                                    <MenuFlyoutItem Text="Abort" Click="RevertAbort_Click" />
-                                </MenuFlyoutSubItem>
-                            </MenuFlyout>
-                        </DropDownButton.Flyout>
-                    </DropDownButton>
 
                     <!-- Only present when a remote resolves to something browsable, so a local-only
                          repository is not offered links that go nowhere. -->
@@ -255,7 +229,39 @@
                 </StackPanel>
             </Grid>
 
-            <InfoBar Grid.Row="1" Margin="20,0,20,8"
+            <!--
+                A paused operation is otherwise invisible: a rebase stopped on a conflict looks much
+                like an ordinary dirty working directory. The actions are here rather than in a menu
+                because this is the only thing worth doing while the repository is in this state.
+            -->
+            <InfoBar Grid.Row="1" Margin="20,0,20,8" IsOpen="{x:Bind Tab.HasOperation, Mode=OneWay}"
+                     IsClosable="False" Severity="Warning"
+                     Title="{x:Bind Tab.Operation.Title, Mode=OneWay}"
+                     Message="{x:Bind Tab.Operation.Message, Mode=OneWay}">
+                <!-- The actions go in the content: ActionButton takes a single ButtonBase, and this
+                     state needs several. -->
+                <InfoBar.Content>
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,12">
+                        <Button Content="Continue" Click="OperationContinue_Click"
+                                Visibility="{x:Bind Tab.Operation.ContinueVisibility, Mode=OneWay}" />
+                        <Button Content="Skip this commit" Click="OperationSkip_Click"
+                                Visibility="{x:Bind Tab.Operation.SkipVisibility, Mode=OneWay}" />
+                        <Button Content="Abort" Click="OperationAbort_Click" />
+                        <Button Content="Show conflicts" Click="ShowConflicts_Click" />
+                    </StackPanel>
+                </InfoBar.Content>
+            </InfoBar>
+
+            <!-- Committing fails without an identity, and git's own error does not say where to set it. -->
+            <InfoBar Grid.Row="2" Margin="20,0,20,8" IsOpen="{x:Bind Tab.NeedsIdentity, Mode=OneWay}"
+                     IsClosable="False" Severity="Warning"
+                     Title="No commit identity configured"
+                     Message="Set your name and email before committing, or git will refuse.">
+                <InfoBar.ActionButton>
+                    <Button Content="Open Git config" Click="OpenGitConfig_Click" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+            <InfoBar Grid.Row="3" Margin="20,0,20,8"
                      IsOpen="{x:Bind Tab.IsResultOpen, Mode=TwoWay}"
                      Severity="{x:Bind Tab.ResultSeverity, Mode=OneWay}"
                      Title="{x:Bind Tab.ResultTitle, Mode=OneWay}">
@@ -269,7 +275,7 @@
                 </InfoBar.Content>
             </InfoBar>
 
-            <Grid Grid.Row="2">
+            <Grid Grid.Row="4">
                 <views:ChangesView x:Name="ChangesPage" Tab="{x:Bind Tab, Mode=OneWay}" />
                 <views:HistoryView x:Name="HistoryPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
                 <views:ReflogView x:Name="ReflogPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
