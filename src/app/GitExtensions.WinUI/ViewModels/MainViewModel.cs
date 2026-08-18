@@ -74,6 +74,7 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(SelectedRepository));
                 OnPropertyChanged(nameof(HomeVisibility));
                 OnPropertyChanged(nameof(RepositoryVisibility));
+                OnPropertyChanged(nameof(StatusBarVisibility));
             }
         }
     }
@@ -109,6 +110,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(ToolbarVisibility));
+            OnPropertyChanged(nameof(StatusBarVisibility));
             OnPropertyChanged(nameof(IsZen));
             OnPropertyChanged(nameof(IsAdvancedSelected));
             OnPropertyChanged(nameof(AdvancedVisibility));
@@ -117,6 +119,13 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Zen hides the shell chrome entirely — the commit list is all that's left.</summary>
     public Visibility ToolbarVisibility => Mode == UiMode.Zen ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>
+    ///  The status bar shows the selected repository's state, so it has nothing to say on Home, and
+    ///  Zen hides it with the rest of the chrome.
+    /// </summary>
+    public Visibility StatusBarVisibility =>
+        SelectedRepository is not null && Mode != UiMode.Zen ? Visibility.Visible : Visibility.Collapsed;
 
     public bool IsZen => Mode == UiMode.Zen;
 

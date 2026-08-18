@@ -457,14 +457,37 @@ public sealed class RepositoryTabViewModel : ShellTab
     public bool IsLoading
     {
         get => _isLoading;
-        private set => SetProperty(ref _isLoading, value);
+        private set
+        {
+            if (SetProperty(ref _isLoading, value))
+            {
+                RaiseWorkingChanged();
+            }
+        }
     }
 
     /// <summary>True while a git operation (fetch/pull/push/checkout/commit) is running.</summary>
     public bool IsBusy
     {
         get => _isBusy;
-        private set => SetProperty(ref _isBusy, value);
+        private set
+        {
+            if (SetProperty(ref _isBusy, value))
+            {
+                RaiseWorkingChanged();
+            }
+        }
+    }
+
+    /// <summary>Anything running at all — a load or an operation — for the status bar's spinner.</summary>
+    public bool IsWorking => IsBusy || IsLoading;
+
+    public Visibility BusyVisibility => IsWorking ? Visibility.Visible : Visibility.Collapsed;
+
+    private void RaiseWorkingChanged()
+    {
+        OnPropertyChanged(nameof(IsWorking));
+        OnPropertyChanged(nameof(BusyVisibility));
     }
 
     /// <summary>

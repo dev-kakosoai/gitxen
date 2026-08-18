@@ -10,7 +10,7 @@
          is right for the themes that mean to look like part of Windows and wrong for the ones that
          commit to their own background colour. See ThemeService.ApplyBackdrop. -->
 
-    <Grid x:Name="RootGrid" RowDefinitions="Auto,*"
+    <Grid x:Name="RootGrid" RowDefinitions="Auto,*,Auto"
           AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop">
         <Grid.Resources>
             <!-- Its Source is assigned in code: a CollectionViewSource is a resource rather than part
@@ -220,11 +220,21 @@
         </Grid>
 
         <!--
+            The status bar: which branch, how far it has diverged, what is uncommitted, and whether
+            anything is running — the facts worth knowing from every section, in one strip. Each
+            segment jumps to the section that acts on it.
+        -->
+        <views:StatusBar Grid.Row="2"
+                         Tab="{x:Bind ViewModel.SelectedRepository, Mode=OneWay}"
+                         SectionRequested="StatusBar_SectionRequested"
+                         Visibility="{x:Bind ViewModel.StatusBarVisibility, Mode=OneWay}" />
+
+        <!--
             The first-run wizard: an overlay across the whole window, title bar row included, so
             nothing behind it can be clicked while it is up. Last child, so it draws over everything
             else. Created collapsed and shown when the session says setup has not been through.
         -->
-        <views:SetupWizardView x:Name="SetupWizard" Grid.RowSpan="2"
+        <views:SetupWizardView x:Name="SetupWizard" Grid.RowSpan="3"
                                Visibility="Collapsed"
                                ThemeChanged="SetupWizard_ThemeChanged"
                                Completed="SetupWizard_Completed" />

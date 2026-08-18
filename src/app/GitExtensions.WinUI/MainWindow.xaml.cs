@@ -517,6 +517,10 @@ public sealed partial class MainWindow : Window
         await dialog.ShowAsync();
     }
 
+    /// <summary>A status bar segment asking for its section — branch to Branches, changes to Changes.</summary>
+    private async void StatusBar_SectionRequested(object? sender, string tag) =>
+        await Repository.NavigateToSectionAsync(tag);
+
     private void ModeBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) =>
         ViewModel.Mode = ReferenceEquals(sender.SelectedItem, AdvancedModeItem) ? UiMode.Advanced : UiMode.Simple;
 

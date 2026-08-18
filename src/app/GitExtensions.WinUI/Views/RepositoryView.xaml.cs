@@ -527,6 +527,15 @@ public sealed partial class RepositoryView : UserControl
         _ => char.ToUpperInvariant(tag[0]) + tag[1..]
     };
 
+    /// <summary>Shows a section by its navigation tag. The status bar's deep links land here.</summary>
+    public async Task NavigateToSectionAsync(string tag)
+    {
+        if (Pages.TryGetValue(tag, out RepositoryPage? page))
+        {
+            await NavigateAsync(tag, page);
+        }
+    }
+
     private async Task NavigateAsync(string tag, RepositoryPage page)
     {
         NavigationViewItem? item = Navigation.MenuItems
