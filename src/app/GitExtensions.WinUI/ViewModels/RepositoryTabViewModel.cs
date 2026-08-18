@@ -123,6 +123,14 @@ public sealed class RepositoryTabViewModel : ShellTab
 
     public ObservableCollection<ReflogEntry> Reflog { get; } = [];
 
+    /// <summary>Files with unresolved merge conflicts, and the shape of each conflict.</summary>
+    public ObservableCollection<ConflictedFile> Conflicts { get; } = [];
+
+    /// <summary>Drives the Conflicts navigation badge, so the count is visible without going there.</summary>
+    public int ConflictCount => Conflicts.Count;
+
+    public Visibility ConflictVisibility => Conflicts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
     public ObservableCollection<GitConfigEntry> LocalConfig { get; } = [];
 
     public ObservableCollection<GitConfigEntry> GlobalConfig { get; } = [];
@@ -730,6 +738,36 @@ public sealed class RepositoryTabViewModel : ShellTab
     public Task<GitOperationResult> BisectAsync(string action) =>
         RunOperationAsync(loader => loader.Bisect(action));
 
+    /// <summary>Re-reads the conflicts and refreshes the count the navigation badge shows.</summary>
+    public async Task LoadConflictsAsync()
+    {
+        await ReplaceAsync(Conflicts, _loader.GetConflicts);
+
+        OnPropertyChanged(nameof(ConflictCount));
+        OnPropertyChanged(nameof(ConflictVisibility));
+    }
+
+    /// <summary>
+    ///  Resolves one conflict by taking a side. Reloads afterwards, since resolving the last one
+    ///  changes what the operation banner should say.
+    /// </summary>
+    public Task<GitOperationResult> TakeSideAsync(ConflictedFile file, bool ours) =>
+        RunOperationAsync(loader => loader.TakeSide(file, ours));
+
+    public Task<GitOperationResult> TakeSideForAllAsync(bool ours) =>
+        RunOperationAsync(loader => loader.TakeSideForAll(ours));
+
+    /// <summary>Stages a file the user resolved by hand, which is what git means by resolved.</summary>
+    public Task<GitOperationResult> MarkConflictResolvedAsync(string path) =>
+        RunOperationAsync(loader => loader.MarkResolved(path));
+
+    /// <summary>Runs the merge tool. Blocks until the tool closes, so it is kept off the UI thread.</summary>
+    public Task<GitOperationResult> LaunchMergeToolAsync(string path) =>
+        RunOperationAsync(loader => loader.LaunchMergeTool(path));
+
+    public Task<string> ReadConflictedTextAsync(string path) =>
+        Task.Run(() => _loader.ReadConflictedText(path));
+
     public Task<IReadOnlyList<string>> GetConflictedFilesAsync() =>
         Task.Run(_loader.GetConflictedFiles);
 
@@ -1076,6 +1114,8 @@ public sealed class RepositoryTabViewModel : ShellTab
     private async Task RefreshRepositoryStateAsync(CancellationToken cancellationToken)
     {
         Operation = await Task.Run(_loader.GetCurrentOperation, cancellationToken);
+
+        await LoadConflictsAsync();
 
         (string name, string email) = await Task.Run(_loader.GetEffectiveIdentity, cancellationToken);
         NeedsIdentity = name.Length == 0 || email.Length == 0;

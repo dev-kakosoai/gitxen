@@ -1,0 +1,84 @@
+<views:RepositoryPage
+    x:Class="GitExtensions.WinUI.Views.ConflictsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:GitExtensions.WinUI.Models"
+    xmlns:views="using:GitExtensions.WinUI.Views">
+
+    <Grid RowDefinitions="Auto,Auto,*" Padding="20,16,20,16">
+
+        <StackPanel Orientation="Horizontal" Spacing="24" HorizontalAlignment="Left">
+            <StackPanel Spacing="2">
+                <TextBlock Text="Conflicts" Style="{StaticResource PageTitleStyle}" />
+                <TextBlock Style="{StaticResource PageSubtitleStyle}"
+                           Text="Choose a side per file, or edit it and mark it resolved." />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Content="Keep ours for all" Click="TakeAllOurs_Click" />
+                <Button Content="Keep theirs for all" Click="TakeAllTheirs_Click" />
+                <Button Click="Refresh_Click" ToolTipService.ToolTip="Re-read the conflicts">
+                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                </Button>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- "Ours" and "theirs" mean the opposite things during a rebase, which catches people out. -->
+        <!-- One-time, refreshed by the Bindings.Update() in ActivateAsync: these depend on state the
+             page re-reads itself rather than on anything that raises notifications. -->
+        <InfoBar Grid.Row="1" Margin="0,14,0,0" IsOpen="True" IsClosable="False" Severity="Informational"
+                 Title="Which side is which"
+                 Message="{x:Bind SideExplanation}" />
+
+        <StackPanel Grid.Row="2" Spacing="10" VerticalAlignment="Center"
+                    Visibility="{x:Bind EmptyVisibility}">
+            <FontIcon Glyph="&#xE73E;" Style="{StaticResource EmptyStateGlyphStyle}" />
+            <TextBlock Text="No conflicts" Style="{StaticResource EmptyStateTitleStyle}" />
+            <TextBlock Style="{StaticResource EmptyStateBodyStyle}"
+                       Text="Nothing is waiting to be resolved. If an operation is still paused, continue it from the banner above." />
+        </StackPanel>
+
+        <Border Grid.Row="2" Margin="0,16,0,0" Style="{StaticResource CardBorderStyle}"
+                Visibility="{x:Bind ListVisibility}">
+            <ListView ItemsSource="{x:Bind Tab.Conflicts, Mode=OneWay}" SelectionMode="Single" Padding="4"
+                      ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="models:ConflictedFile">
+                        <!-- Fixed widths rather than a star column: a column after one is arranged
+                             off the screen here. -->
+                        <Grid ColumnDefinitions="Auto,380,260,Auto" ColumnSpacing="14" Padding="4,6">
+                            <FontIcon Glyph="&#xE7BA;" FontSize="14" VerticalAlignment="Center"
+                                      Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind FileName}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind Directory}" FontSize="11"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="2" Text="{x:Bind Description}"
+                                       Style="{StaticResource SecondaryTextStyle}" FontSize="12"
+                                       TextWrapping="Wrap" />
+
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
+                                        VerticalAlignment="Center">
+                                <Button Content="{x:Bind OursLabel}" Tag="{x:Bind}" Click="TakeOurs_Click"
+                                        Padding="10,3" FontSize="12" />
+                                <Button Content="{x:Bind TheirsLabel}" Tag="{x:Bind}" Click="TakeTheirs_Click"
+                                        Padding="10,3" FontSize="12" />
+                                <Button Content="Merge tool" Tag="{x:Bind}" Click="MergeTool_Click"
+                                        Padding="10,3" FontSize="12"
+                                        Visibility="{x:Bind MergeToolVisibility}" />
+                                <Button Content="View" Tag="{x:Bind}" Click="View_Click"
+                                        Padding="10,3" FontSize="12" />
+                                <Button Content="Mark resolved" Tag="{x:Bind}" Click="MarkResolved_Click"
+                                        Padding="10,3" FontSize="12" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Border>
+    </Grid>
+</views:RepositoryPage>

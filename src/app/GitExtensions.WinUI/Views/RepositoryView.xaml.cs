@@ -41,6 +41,7 @@ public sealed partial class RepositoryView : UserControl
     private IReadOnlyDictionary<string, RepositoryPage> Pages => new Dictionary<string, RepositoryPage>
     {
         ["changes"] = ChangesPage,
+        ["conflicts"] = ConflictsPage,
         ["history"] = HistoryPage,
         ["reflog"] = ReflogPage,
         ["branches"] = BranchesPage,
@@ -480,21 +481,9 @@ public sealed partial class RepositoryView : UserControl
         await RunAsync(t => t.PushAsync(options));
     }
 
-    private async void ShowConflicts_Click(object sender, RoutedEventArgs e)
-    {
-        if (Tab is not RepositoryTabViewModel tab)
-        {
-            return;
-        }
-
-        IReadOnlyList<string> conflicts = await tab.GetConflictedFilesAsync();
-
-        tab.ReportInformation(
-            conflicts.Count == 0 ? "No conflicts" : $"{conflicts.Count} conflicted file(s)",
-            conflicts.Count == 0
-                ? "Nothing is waiting to be resolved."
-                : string.Join(Environment.NewLine, conflicts));
-    }
+    /// <summary>Takes you to the page that can actually resolve them.</summary>
+    private async void ShowConflicts_Click(object sender, RoutedEventArgs e) =>
+        await NavigateAsync("conflicts", ConflictsPage);
 
     private async Task RunAsync(Func<RepositoryTabViewModel, Task<Services.GitOperationResult>> operation)
     {

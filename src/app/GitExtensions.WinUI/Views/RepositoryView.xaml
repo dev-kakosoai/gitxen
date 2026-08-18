@@ -54,6 +54,16 @@
                 </NavigationViewItem.InfoBadge>
             </NavigationViewItem>
 
+            <NavigationViewItem Tag="conflicts" Content="Conflicts">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE7BA;" />
+                </NavigationViewItem.Icon>
+                <NavigationViewItem.InfoBadge>
+                    <InfoBadge Value="{x:Bind Tab.ConflictCount, Mode=OneWay}"
+                               Visibility="{x:Bind Tab.ConflictVisibility, Mode=OneWay}" />
+                </NavigationViewItem.InfoBadge>
+            </NavigationViewItem>
+
             <NavigationViewItem Tag="history" Content="History">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE81C;" />
@@ -277,6 +287,7 @@
 
             <Grid Grid.Row="4">
                 <views:ChangesView x:Name="ChangesPage" Tab="{x:Bind Tab, Mode=OneWay}" />
+                <views:ConflictsView x:Name="ConflictsPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
                 <views:HistoryView x:Name="HistoryPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
                 <views:ReflogView x:Name="ReflogPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
                 <views:BranchesView x:Name="BranchesPage" Tab="{x:Bind Tab, Mode=OneWay}" Visibility="Collapsed" />
