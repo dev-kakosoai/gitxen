@@ -4,11 +4,11 @@ PackageVersion: {{VERSION}}
 PackageLocale: en-US
 Publisher: Kakoso
 PublisherUrl: https://github.com/dev-kakosoai
-PublisherSupportUrl: https://github.com/dev-kakosoai/gitextensions/issues
+PublisherSupportUrl: https://github.com/dev-kakosoai/gitxen/issues
 PackageName: Gitxen
-PackageUrl: https://github.com/dev-kakosoai/gitextensions
+PackageUrl: https://github.com/dev-kakosoai/gitxen
 License: GPL-3.0-only
-LicenseUrl: https://github.com/dev-kakosoai/gitextensions/blob/master/LICENSE.md
+LicenseUrl: https://github.com/dev-kakosoai/gitxen/blob/master/LICENSE.md
 Copyright: Copyright (c) Git Extensions authors
 ShortDescription: A git client for Windows, built with WinUI 3.
 Description: >-
@@ -25,6 +25,6 @@ Tags:
 - source-control
 - version-control
 - winui
-ReleaseNotesUrl: https://github.com/dev-kakosoai/gitextensions/releases/tag/{{RELEASE_TAG}}
+ReleaseNotesUrl: https://github.com/dev-kakosoai/gitxen/releases/tag/{{RELEASE_TAG}}
 ManifestType: defaultLocale
 ManifestVersion: 1.10.0

@@ -1,7 +1,7 @@
 {
     "version": "{{VERSION}}",
     "description": "A git client for Windows, built with WinUI 3.",
-    "homepage": "https://github.com/dev-kakosoai/gitextensions",
+    "homepage": "https://github.com/dev-kakosoai/gitxen",
     "license": "GPL-3.0-only",
     "notes": [
         "Gitxen is a derivative work of Git Extensions, under the same GPL-3.0 licence.",
@@ -26,17 +26,17 @@
         ]
     ],
     "checkver": {
-        "github": "https://github.com/dev-kakosoai/gitextensions",
+        "github": "https://github.com/dev-kakosoai/gitxen",
         "regex": "gitxen-v([0-9.]+)"
     },
     "autoupdate": {
         "architecture": {
             "64bit": {
-                "url": "https://github.com/dev-kakosoai/gitextensions/releases/download/gitxen-v$version/Gitxen-$version-x64.zip"
+                "url": "https://github.com/dev-kakosoai/gitxen/releases/download/gitxen-v$version/Gitxen-$version-x64.zip"
             }
         },
         "hash": {
-            "url": "https://github.com/dev-kakosoai/gitextensions/releases/download/gitxen-v$version/SHA256SUMS.txt"
+            "url": "https://github.com/dev-kakosoai/gitxen/releases/download/gitxen-v$version/SHA256SUMS.txt"
         }
     }
 }

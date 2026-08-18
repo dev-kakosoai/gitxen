@@ -19,4 +19,4 @@ locally with:
 
 The installer is built from source by the workflow in
 .github/workflows/gitxen-release.yml. Gitxen is licensed under GPL-3.0; the licence text is
-included in the installer and at https://github.com/dev-kakosoai/gitextensions/blob/master/LICENSE.md
+included in the installer and at https://github.com/dev-kakosoai/gitxen/blob/master/LICENSE.md

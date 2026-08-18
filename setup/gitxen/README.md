@@ -120,7 +120,7 @@ submission does not need any of this: Partner Center signs the package, but `Ide
 | winget | `winget install Kakoso.Gitxen` | MSI, per-machine |
 | Chocolatey | `choco install gitxen` | MSI, per-machine |
 | Scoop | `scoop install gitxen` | zip, per-user, no admin |
-| PowerShell | `irm https://raw.githubusercontent.com/dev-kakosoai/gitextensions/master/setup/gitxen/install.ps1 \| iex` | zip, per-user, no admin |
+| PowerShell | `irm https://raw.githubusercontent.com/dev-kakosoai/gitxen/master/setup/gitxen/install.ps1 \| iex` | zip, per-user, no admin |
 | Direct | The `.msi` from the release page | MSI, per-machine |
 
 All five leave `gitxen` on `PATH` and a Start menu entry.

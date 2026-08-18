@@ -3,18 +3,18 @@
   <metadata>
     <id>gitxen</id>
     <version>{{VERSION}}</version>
-    <packageSourceUrl>https://github.com/dev-kakosoai/gitextensions/tree/master/setup/gitxen/packaging/chocolatey</packageSourceUrl>
+    <packageSourceUrl>https://github.com/dev-kakosoai/gitxen/tree/master/setup/gitxen/packaging/chocolatey</packageSourceUrl>
     <owners>Kakoso</owners>
     <title>Gitxen</title>
     <authors>Kakoso, Git Extensions authors</authors>
-    <projectUrl>https://github.com/dev-kakosoai/gitextensions</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/dev-kakosoai/gitextensions/master/src/app/GitExtensions.WinUI/Assets/gitxen-128.png</iconUrl>
+    <projectUrl>https://github.com/dev-kakosoai/gitxen</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/dev-kakosoai/gitxen/master/src/app/GitExtensions.WinUI/Assets/gitxen-128.png</iconUrl>
     <copyright>Copyright (c) Git Extensions authors</copyright>
-    <licenseUrl>https://github.com/dev-kakosoai/gitextensions/blob/master/LICENSE.md</licenseUrl>
+    <licenseUrl>https://github.com/dev-kakosoai/gitxen/blob/master/LICENSE.md</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <projectSourceUrl>https://github.com/dev-kakosoai/gitextensions</projectSourceUrl>
-    <docsUrl>https://github.com/dev-kakosoai/gitextensions/blob/master/src/app/GitExtensions.WinUI/README.md</docsUrl>
-    <bugTrackerUrl>https://github.com/dev-kakosoai/gitextensions/issues</bugTrackerUrl>
+    <projectSourceUrl>https://github.com/dev-kakosoai/gitxen</projectSourceUrl>
+    <docsUrl>https://github.com/dev-kakosoai/gitxen/blob/master/src/app/GitExtensions.WinUI/README.md</docsUrl>
+    <bugTrackerUrl>https://github.com/dev-kakosoai/gitxen/issues</bugTrackerUrl>
     <tags>git git-client git-gui source-control version-control winui admin</tags>
     <summary>A git client for Windows, built with WinUI 3.</summary>
     <description><![CDATA[
@@ -34,7 +34,7 @@ is distributed under the same GPL-3.0 licence. It is not endorsed by or affiliat
 The installer is machine-wide and adds `gitxen` to `PATH`. It carries its own copies of the .NET
 runtime and the Windows App SDK, so nothing else has to be installed first.
 ]]></description>
-    <releaseNotes>https://github.com/dev-kakosoai/gitextensions/releases/tag/{{RELEASE_TAG}}</releaseNotes>
+    <releaseNotes>https://github.com/dev-kakosoai/gitxen/releases/tag/{{RELEASE_TAG}}</releaseNotes>
   </metadata>
   <files>
     <file src="tools\**" target="tools" />

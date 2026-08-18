@@ -32,8 +32,8 @@
 
     <Icon Id="GitxenIcon.ico" SourceFile="$(var.IconFile)" />
     <Property Id="ARPPRODUCTICON" Value="GitxenIcon.ico" />
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/dev-kakosoai/gitextensions" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/dev-kakosoai/gitextensions/issues" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/dev-kakosoai/gitxen" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/dev-kakosoai/gitxen/issues" />
     <!-- ARPNOMODIFY is set by WixUI_InstallDir itself; declaring it again here is a build error. -->
 
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />

@@ -10,7 +10,7 @@
 
     Designed to be run straight from the web:
 
-        irm https://raw.githubusercontent.com/dev-kakosoai/gitextensions/master/setup/gitxen/install.ps1 | iex
+        irm https://raw.githubusercontent.com/dev-kakosoai/gitxen/master/setup/gitxen/install.ps1 | iex
 
     A script run that way cannot be given parameters, so each one is also read from an environment
     variable:
@@ -46,7 +46,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$repository = 'dev-kakosoai/gitextensions'
+$repository = 'dev-kakosoai/gitxen'
 $tagPrefix = 'gitxen-v'
 $executableName = 'GitExtensions.WinUI.exe'
 $displayName = 'Gitxen'

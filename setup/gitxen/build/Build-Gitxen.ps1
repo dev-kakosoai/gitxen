@@ -53,7 +53,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$repository = 'dev-kakosoai/gitextensions'
+$repository = 'dev-kakosoai/gitxen'
 $wixToolVersion = '5.0.2'
 $setupDir = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent (Split-Path -Parent $setupDir)
