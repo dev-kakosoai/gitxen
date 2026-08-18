@@ -191,6 +191,17 @@ internal sealed partial class RepositoryLoader
                 Subject: fields[3],
                 IsAnnotated: string.Equals(fields[4], "tag", StringComparison.Ordinal)));
 
+    /// <summary>
+    ///  Every path git tracks, relative to the repository root.
+    /// </summary>
+    /// <remarks>
+    ///  Read live for the go-to palette rather than kept anywhere: ls-files reads the index without
+    ///  touching the worktree, so even this repository's ~4,000 paths come back in tens of
+    ///  milliseconds, and a listing that is never stale beats an index that must be invalidated.
+    /// </remarks>
+    public IReadOnlyList<string> GetTrackedFiles() =>
+        ReadLines(new GitArgumentBuilder("ls-files"));
+
     /// <summary>The stash stack, most recent first.</summary>
     public IReadOnlyList<StashInfo> GetStashes() =>
         ReadRecords(

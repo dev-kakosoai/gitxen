@@ -21,7 +21,8 @@
 
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Modifiers="Control" Key="O" Invoked="OpenRepositoryAccelerator_Invoked" />
-            <KeyboardAccelerator Modifiers="Control" Key="T" Invoked="OpenRepositoryAccelerator_Invoked" />
+            <!-- Ctrl+T is the go-to palette, matching a decade of IDE muscle memory. -->
+            <KeyboardAccelerator Modifiers="Control" Key="T" Invoked="GoToAccelerator_Invoked" />
             <KeyboardAccelerator Modifiers="Control" Key="W" Invoked="CloseTabAccelerator_Invoked" />
             <KeyboardAccelerator Modifiers="Control" Key="R" Invoked="RefreshAccelerator_Invoked" />
             <KeyboardAccelerator Modifiers="Control,Shift" Key="P" Invoked="PaletteAccelerator_Invoked" />

@@ -331,6 +331,202 @@ public sealed partial class RepositoryView : UserControl
         return commands;
     }
 
+    /// <summary>
+    ///  Opens the go-to palette: type-to-jump over branches, tags, commits, stashes, files and pages.
+    /// </summary>
+    /// <remarks>
+    ///  The palette opens immediately with whatever is already in memory; listings the user has not
+    ///  visited yet and the tracked-file list stream in behind it, so a cold open is still instant.
+    ///  The chosen jump runs after the dialog has closed, for the same one-dialog-at-a-time reason as
+    ///  the command palette.
+    /// </remarks>
+    public async Task ShowGoToAsync()
+    {
+        if (Tab is not RepositoryTabViewModel tab)
+        {
+            return;
+        }
+
+        GoToPalette palette = new(BuildGoToItems(tab)) { XamlRoot = XamlRoot };
+
+        // Awaited by no one on purpose: it appends to the palette while the palette is open.
+        _ = StreamGoToSourcesAsync(palette, tab);
+
+        await palette.ShowAsync();
+
+        if (palette.Chosen is GoToItem chosen)
+        {
+            await chosen.Invoke();
+        }
+    }
+
+    /// <summary>What can be offered without touching git: the sections and every loaded listing.</summary>
+    private List<GoToItem> BuildGoToItems(RepositoryTabViewModel tab)
+    {
+        List<GoToItem> items = [];
+
+        foreach ((string tag, RepositoryPage page) in Pages)
+        {
+            RepositoryPage target = page;
+            string targetTag = tag;
+            items.Add(new GoToItem(
+                SectionGlyphs.GetValueOrDefault(tag, "\uE8A9"),
+                SectionTitle(tag), "Section", "",
+                () => NavigateAsync(targetTag, target))
+            { CategoryRank = 0 });
+        }
+
+        items.AddRange(BranchItems(tab));
+        items.AddRange(TagItems(tab));
+        items.AddRange(StashItems(tab));
+        items.AddRange(RemoteItems(tab));
+        items.AddRange(WorktreeItems(tab));
+        items.AddRange(SubmoduleItems(tab));
+        items.AddRange(CommitItems(tab));
+
+        return items;
+    }
+
+    /// <summary>
+    ///  Loads what was not in memory when the palette opened — listings from unvisited pages and the
+    ///  tracked files — and appends each source as it arrives.
+    /// </summary>
+    private async Task StreamGoToSourcesAsync(GoToPalette palette, RepositoryTabViewModel tab)
+    {
+        try
+        {
+            if (tab.BranchDetails.Count == 0)
+            {
+                await tab.LoadBranchesAsync();
+                palette.AddItems(BranchItems(tab));
+            }
+
+            if (tab.Tags.Count == 0)
+            {
+                await tab.LoadTagsAsync();
+                palette.AddItems(TagItems(tab));
+            }
+
+            if (tab.Stashes.Count == 0)
+            {
+                await tab.LoadStashesAsync();
+                palette.AddItems(StashItems(tab));
+            }
+
+            IReadOnlyList<string> files = await tab.GetTrackedFilesAsync();
+
+            palette.AddItems(files.Select(file =>
+            {
+                string full = System.IO.Path.Combine(tab.WorkingDir, file.Replace('/', '\\'));
+                return new GoToItem(
+                    "\uE7C3", System.IO.Path.GetFileName(file), "File", file,
+                    () =>
+                    {
+                        // Reveal rather than open: a go-to should not guess which editor a path
+                        // belongs to, and Explorer's context menu offers all of them.
+                        System.Diagnostics.Process.Start(
+                            new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{full}\"")
+                            {
+                                UseShellExecute = true
+                            });
+                        return Task.CompletedTask;
+                    })
+                { CategoryRank = 9 };
+            }));
+        }
+        catch (Exception)
+        {
+            // A background source that fails to load just does not appear; the palette stays usable
+            // with whatever did arrive.
+        }
+    }
+
+    private IEnumerable<GoToItem> BranchItems(RepositoryTabViewModel tab)
+    {
+        foreach (BranchInfo branch in tab.BranchDetails.ToList())
+        {
+            yield return new GoToItem(
+                "\uE8AB", branch.Name, "Branch", $"{branch.ShortHash}  {branch.Date}",
+                () => NavigateAsync("branches", BranchesPage))
+            { CategoryRank = 1 };
+        }
+
+        foreach (RemoteBranchInfo branch in tab.RemoteBranches.ToList())
+        {
+            yield return new GoToItem(
+                "\uE968", branch.FullName, "Remote branch", branch.ShortHash,
+                () => NavigateAsync("branches", BranchesPage))
+            { CategoryRank = 4 };
+        }
+    }
+
+    private IEnumerable<GoToItem> TagItems(RepositoryTabViewModel tab) =>
+        tab.Tags.ToList().Select(tag => new GoToItem(
+            "\uE8EC", tag.Name, "Tag", $"{tag.ShortHash}  {tag.Date}",
+            () => NavigateAsync("tags", TagsPage))
+        { CategoryRank = 2 });
+
+    private IEnumerable<GoToItem> StashItems(RepositoryTabViewModel tab) =>
+        tab.Stashes.ToList().Select(stash => new GoToItem(
+            "\uE7B8", stash.Subject, "Stash", stash.Reference,
+            () => NavigateAsync("stashes", StashesPage))
+        { CategoryRank = 3 });
+
+    private IEnumerable<GoToItem> RemoteItems(RepositoryTabViewModel tab) =>
+        tab.Remotes.ToList().Select(remote => new GoToItem(
+            "\uE968", remote.Name, "Remote", remote.FetchUrl,
+            () => NavigateAsync("remotes", RemotesPage))
+        { CategoryRank = 5 });
+
+    private IEnumerable<GoToItem> WorktreeItems(RepositoryTabViewModel tab) =>
+        tab.Worktrees.ToList().Select(worktree => new GoToItem(
+            "\uE8F4", worktree.Branch.Length == 0 ? worktree.Path : worktree.Branch, "Worktree", worktree.Path,
+            () => NavigateAsync("worktrees", WorktreesPage))
+        { CategoryRank = 6 });
+
+    private IEnumerable<GoToItem> SubmoduleItems(RepositoryTabViewModel tab) =>
+        tab.Submodules.ToList().Select(submodule => new GoToItem(
+            "\uE8B7", submodule.Path, "Submodule", submodule.ShortHash,
+            () => NavigateAsync("submodules", SubmodulesPage))
+        { CategoryRank = 7 });
+
+    /// <summary>
+    ///  The loaded page of commits. Jumping selects the commit and shows History, which brings it
+    ///  into view through the selection binding.
+    /// </summary>
+    private IEnumerable<GoToItem> CommitItems(RepositoryTabViewModel tab) =>
+        tab.Commits.ToList().Where(commit => !commit.IsWorkingDirectory).Select(commit => new GoToItem(
+            "\uE81C", commit.Subject, "Commit", $"{commit.ShortHash}  {commit.Author}",
+            async () =>
+            {
+                tab.SelectedCommit = commit;
+                await NavigateAsync("history", HistoryPage);
+            })
+        { CategoryRank = 8 });
+
+    private static readonly IReadOnlyDictionary<string, string> SectionGlyphs = new Dictionary<string, string>
+    {
+        ["changes"] = "\uE70F",
+        ["conflicts"] = "\uE7BA",
+        ["history"] = "\uE81C",
+        ["reflog"] = "\uE7A7",
+        ["branches"] = "\uE8AB",
+        ["remotes"] = "\uE968",
+        ["tags"] = "\uE8EC",
+        ["stashes"] = "\uE7B8",
+        ["submodules"] = "\uE8B7",
+        ["worktrees"] = "\uE8F4",
+        ["gitconfig"] = "\uE9F5",
+        ["maintenance"] = "\uE90F",
+        ["settings"] = "\uE713"
+    };
+
+    private static string SectionTitle(string tag) => tag switch
+    {
+        "gitconfig" => "Git config",
+        _ => char.ToUpperInvariant(tag[0]) + tag[1..]
+    };
+
     private async Task NavigateAsync(string tag, RepositoryPage page)
     {
         NavigationViewItem? item = Navigation.MenuItems

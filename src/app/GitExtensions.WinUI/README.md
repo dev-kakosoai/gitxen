@@ -25,6 +25,14 @@ dotnet build src/app/GitExtensions.WinUI/GitExtensions.WinUI.csproj -c Debug -p:
 x64 only; the rest of the solution is AnyCPU. Needs a real Windows SDK install, because the native
 WinUI toolchain (`cswinrt.exe`, PRI tasks) reads the `KitsRoot10` registry value.
 
+Two solution filters at the repo root scope day-to-day work to this app's dependency closure,
+so a bare `dotnet build` of all fifty solution projects stays a pre-push-only affair:
+
+```
+dotnet build Gitxen.slnf          # this app + its four backend projects (also openable in VS)
+dotnet test  Gitxen.Tests.slnf    # the backend test projects that cover those dependencies
+```
+
 The output is `artifacts/Debug/bin/GitExtensions.WinUI/x64/net10.0-windows10.0.19041.0/GitExtensions.WinUI.exe`.
 
 **Building is not proof it runs.** The csproj carries several workarounds for genuine .NET 10 SDK /

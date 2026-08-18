@@ -448,6 +448,17 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>Ctrl+T: the go-to palette, which needs a repository for the same reason as Ctrl+Shift+P.</summary>
+    private async void GoToAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+
+        if (ViewModel.SelectedRepository is not null)
+        {
+            await Repository.ShowGoToAsync();
+        }
+    }
+
     /// <summary>
     ///  Lists the keyboard shortcuts.
     /// </summary>
@@ -465,6 +476,7 @@ public sealed partial class MainWindow : Window
             ("Ctrl+W", "Close the current repository"),
             ("Ctrl+R", "Reload the current repository"),
             ("Ctrl+Shift+P", "Command palette"),
+            ("Ctrl+T", "Go to anything: branch, tag, commit, stash, file"),
             ("Ctrl+Enter", "Commit (on the Changes page)"),
             ("Ctrl+F", "Filter commits (on the History page)"),
             ("F1", "This list"),

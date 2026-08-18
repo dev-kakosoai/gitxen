@@ -718,6 +718,10 @@ public sealed class RepositoryTabViewModel : ShellTab
     public Task<string> GetStashDiffAsync(string reference) =>
         Task.Run(() => _loader.GetStashDiff(reference));
 
+    /// <summary>Tracked paths for the go-to palette; read fresh so it is never stale.</summary>
+    public Task<IReadOnlyList<string>> GetTrackedFilesAsync() =>
+        Task.Run(() => _loader.GetTrackedFiles());
+
     public Task<GitOperationResult> StashSaveAsync(string message) =>
         RunOperationAsync(loader => loader.StashSave(message));
 
