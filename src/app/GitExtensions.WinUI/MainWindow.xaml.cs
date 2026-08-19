@@ -82,6 +82,16 @@ public sealed partial class MainWindow : Window
         // palette itself is already registered; this is the part that needs a window to exist.
         ThemeService.Attach(this, RootGrid);
 
+        // Ctrl+` toggles the terminal, as it does in the editors people already know. Added in code
+        // because the backtick key (VK_OEM_3) has no named VirtualKey member for the markup to use.
+        KeyboardAccelerator terminalToggle = new()
+        {
+            Modifiers = Windows.System.VirtualKeyModifiers.Control,
+            Key = (Windows.System.VirtualKey)0xC0
+        };
+        terminalToggle.Invoked += TerminalAccelerator_Invoked;
+        RootGrid.KeyboardAccelerators.Add(terminalToggle);
+
         Closed += MainWindow_Closed;
     }
 
@@ -213,6 +223,9 @@ public sealed partial class MainWindow : Window
     {
         _sessionSaveTimer?.Stop();
         SaveSession();
+
+        // Explicitly, so no shell process outlives the window that opened it.
+        Repository.ShutdownTerminals();
     }
 
     private async void RepositoryTabs_AddTabButtonClick(TabView sender, object args) =>
@@ -382,11 +395,14 @@ public sealed partial class MainWindow : Window
         ViewModel.AssignToGroup(row.Path, section.Group);
     }
 
-    private void CloseRepository_Click(object sender, RoutedEventArgs e)
+    private void RemoveRepository_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: SidebarRow { OpenTab: RepositoryTabViewModel tab } })
+        if (sender is Button { Tag: SidebarRow { IsHome: false } row })
         {
-            ViewModel.CloseTab(tab);
+            ViewModel.RemoveRepository(row.Path);
+
+            // Home's captions and empty-state text are x:Bind projections that only move when told.
+            Home.UpdateBindings();
         }
     }
 
@@ -577,6 +593,7 @@ public sealed partial class MainWindow : Window
             ("Ctrl+T", "Go to anything: branch, tag, commit, stash, file"),
             ("Ctrl+Enter", "Commit (on the Changes page)"),
             ("Ctrl+F", "Filter commits (on the History page)"),
+            ("Ctrl+`", "Toggle the terminal"),
             ("F1", "This list"),
             ("Escape", "Leave Zen mode")
         ];
@@ -621,6 +638,17 @@ public sealed partial class MainWindow : Window
 
     private void ModeBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) =>
         ViewModel.Mode = ReferenceEquals(sender.SelectedItem, AdvancedModeItem) ? UiMode.Advanced : UiMode.Simple;
+
+    /// <summary>Ctrl+`: the terminal, which lives in the repository view and needs one open.</summary>
+    private void TerminalAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+
+        if (ViewModel.SelectedRepository is not null)
+        {
+            Repository.ToggleTerminal();
+        }
+    }
 
     private void ZenAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {

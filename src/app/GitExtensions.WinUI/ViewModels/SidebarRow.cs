@@ -56,7 +56,11 @@ public sealed class SidebarRow
     /// <summary>Bold marks the repositories that are actually open among their project's members.</summary>
     public FontWeight TitleWeight => IsOpen ? FontWeights.SemiBold : FontWeights.Normal;
 
-    public Visibility CloseVisibility => IsOpen ? Visibility.Visible : Visibility.Collapsed;
+    /// <summary>
+    ///  Every repository row carries the remove cross — pressing it takes the repository off the
+    ///  lists, closing its tab first when it is open. Home is the one row that cannot leave.
+    /// </summary>
+    public Visibility RemoveVisibility => IsHome ? Visibility.Collapsed : Visibility.Visible;
 
     public Brush Accent => Group?.Accent ?? GroupPalette.Accent("Slate");
 

@@ -162,10 +162,10 @@
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
 
-                                    <Button Grid.Column="3" Click="CloseRepository_Click" Tag="{x:Bind}"
+                                    <Button Grid.Column="3" Click="RemoveRepository_Click" Tag="{x:Bind}"
                                             Padding="6,2" FontSize="{StaticResource FontSizeCaption}" VerticalAlignment="Center"
-                                            AutomationProperties.Name="Close tab" ToolTipService.ToolTip="Close"
-                                            Visibility="{x:Bind CloseVisibility}">
+                                            AutomationProperties.Name="Remove from list" ToolTipService.ToolTip="Remove from list"
+                                            Visibility="{x:Bind RemoveVisibility}">
                                         <FontIcon Glyph="&#xE711;" FontSize="{StaticResource IconSizeTiny}" />
                                     </Button>
                                 </Grid>
@@ -230,10 +230,12 @@
         <!--
             The status bar: which branch, how far it has diverged, what is uncommitted, and whether
             anything is running — the facts worth knowing from every section, in one strip. Each
-            segment jumps to the section that acts on it.
+            segment jumps to the section that acts on it. On Home it reports the application
+            instead: the build, the git it found, and how many repositories it knows.
         -->
         <views:StatusBar Grid.Row="2"
                          Tab="{x:Bind ViewModel.SelectedRepository, Mode=OneWay}"
+                         Shell="{x:Bind ViewModel}"
                          SectionRequested="StatusBar_SectionRequested"
                          Visibility="{x:Bind ViewModel.StatusBarVisibility, Mode=OneWay}" />
 

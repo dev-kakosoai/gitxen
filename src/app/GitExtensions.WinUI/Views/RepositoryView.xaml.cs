@@ -28,6 +28,11 @@ public sealed partial class RepositoryView : UserControl
     public RepositoryView()
     {
         InitializeComponent();
+
+        // The terminal opens at whatever height it was last dragged to, matching how the other
+        // dragged panes are remembered. SizeChanged only fires for it once it is visible.
+        TerminalHost.Height = AppOptions.TerminalPaneHeight;
+        TerminalHost.SizeChanged += (_, e) => AppOptions.TerminalPaneHeight = e.NewSize.Height;
     }
 
     public RepositoryTabViewModel? Tab
@@ -45,7 +50,40 @@ public sealed partial class RepositoryView : UserControl
         RefreshBranchMenu();
         RefreshExternalTools();
         RestoreSection();
+
+        // Sessions already running stay in the directory they were opened on; this only points new
+        // ones at the repository now being looked at.
+        if (Tab is RepositoryTabViewModel tab)
+        {
+            Terminal.WorkingDirectory = tab.WorkingDir;
+        }
     }
+
+    /// <summary>
+    ///  Shows or hides the bottom terminal. The pane and its sessions are shared across every
+    ///  repository tab, like the terminal panel in an editor.
+    /// </summary>
+    public void ToggleTerminal()
+    {
+        bool show = TerminalHost.Visibility == Visibility.Collapsed;
+        Visibility visibility = show ? Visibility.Visible : Visibility.Collapsed;
+
+        TerminalHost.Visibility = visibility;
+        TerminalSplitter.Visibility = visibility;
+
+        if (show)
+        {
+            Terminal.EnsureSession();
+            Terminal.FocusInput();
+        }
+    }
+
+    /// <summary>Ends every terminal session. Called by the window on close.</summary>
+    public void ShutdownTerminals() => Terminal.DisposeAll();
+
+    private void Terminal_Click(object sender, RoutedEventArgs e) => ToggleTerminal();
+
+    private void Terminal_CloseRequested(object? sender, EventArgs e) => ToggleTerminal();
 
     /// <summary>
     ///  Selects the section this repository was last on.
@@ -298,6 +336,11 @@ public sealed partial class RepositoryView : UserControl
         commands.Add(new PaletteCommand("Stop comparing commits", "Repository", "", () =>
         {
             tab.StopComparing();
+            return Task.CompletedTask;
+        }));
+        commands.Add(new PaletteCommand("Toggle terminal", "Repository", "PowerShell, cmd, Git Bash", () =>
+        {
+            ToggleTerminal();
             return Task.CompletedTask;
         }));
 

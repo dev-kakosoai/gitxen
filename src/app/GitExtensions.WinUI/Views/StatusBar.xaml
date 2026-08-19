@@ -46,7 +46,30 @@
     <Grid Height="30" Background="{ThemeResource AccentFillColorDefaultBrush}"
           ColumnDefinitions="Auto,*">
 
-        <StackPanel Orientation="Horizontal">
+        <!-- Home has no repository to report, so the bar states the application's own facts:
+             which build, which git, and plain text rather than buttons — there is no section for
+             these facts to jump to. -->
+        <StackPanel Orientation="Horizontal" Spacing="6" Padding="11,0"
+                    Visibility="{x:Bind WhenHome(Tab), Mode=OneWay}">
+            <FontIcon Glyph="&#xE80F;" Style="{StaticResource SegmentGlyphStyle}"
+                      Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+            <TextBlock Text="{x:Bind AppVersionText}" Style="{StaticResource SegmentTextStyle}"
+                       Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+            <TextBlock x:Name="GitVersionText" Style="{StaticResource SegmentTextStyle}"
+                       Margin="11,0,0,0"
+                       Foreground="{ThemeResource TextOnAccentFillColorSecondaryBrush}" />
+        </StackPanel>
+
+        <!-- How many repositories the app knows about, mirroring what the Home page lists. -->
+        <TextBlock Grid.Column="1" Margin="11,0" VerticalAlignment="Center"
+                   FontSize="{StaticResource FontSizeBody}"
+                   Foreground="{ThemeResource TextOnAccentFillColorSecondaryBrush}"
+                   Text="{x:Bind Shell.HomeStatus, Mode=OneWay}"
+                   TextTrimming="CharacterEllipsis"
+                   Visibility="{x:Bind WhenHome(Tab), Mode=OneWay}" />
+
+        <StackPanel Orientation="Horizontal"
+                    Visibility="{x:Bind WhenRepository(Tab), Mode=OneWay}">
 
             <!-- Where you are: the checked-out branch. -->
             <Button Style="{StaticResource SegmentStyle}" Click="Branch_Click"
@@ -121,6 +144,7 @@
                    FontSize="{StaticResource FontSizeBody}"
                    Foreground="{ThemeResource TextOnAccentFillColorSecondaryBrush}"
                    Text="{x:Bind Tab.Status, Mode=OneWay}"
-                   TextTrimming="CharacterEllipsis" />
+                   TextTrimming="CharacterEllipsis"
+                   Visibility="{x:Bind WhenRepository(Tab), Mode=OneWay}" />
     </Grid>
 </UserControl>

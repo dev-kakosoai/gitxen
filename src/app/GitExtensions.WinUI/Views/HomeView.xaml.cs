@@ -85,12 +85,32 @@ public sealed partial class HomeView : UserControl
         }
     }
 
-    /// <summary>Populated on expand rather than on load, so Home never runs git it is not showing.</summary>
-    private async void AppSettings_Expanding(Expander sender, ExpanderExpandingEventArgs args) =>
-        await AppSettings.ActivateAsync();
+    // ---- Sub-pages -------------------------------------------------------------------------------
+    // Application settings and the global git configuration open as pages over Home, swapped by
+    // visibility like every other section in the app. Each is populated on entry rather than on
+    // load, so Home never runs git it is not showing.
 
-    private async void GlobalConfig_Expanding(Expander sender, ExpanderExpandingEventArgs args) =>
+    private async void OpenAppSettings_Click(object sender, RoutedEventArgs e)
+    {
+        ShowPage(SettingsPage);
+        await AppSettings.ActivateAsync();
+    }
+
+    private async void OpenGitConfig_Click(object sender, RoutedEventArgs e)
+    {
+        ShowPage(GitConfigPage);
         await GlobalConfig.ActivateAsync();
+    }
+
+    private void BackToHome_Click(object sender, RoutedEventArgs e) => ShowPage(null);
+
+    /// <summary>Shows one sub-page, or the Home content itself when handed null.</summary>
+    private void ShowPage(UIElement? page)
+    {
+        SettingsPage.Visibility = ReferenceEquals(page, SettingsPage) ? Visibility.Visible : Visibility.Collapsed;
+        GitConfigPage.Visibility = ReferenceEquals(page, GitConfigPage) ? Visibility.Visible : Visibility.Collapsed;
+        MainContent.Visibility = page is null ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     private void SyncLayoutBox() =>
         LayoutBox.SelectedIndex = ViewModel?.Layout == RepositoryLayout.Sidebar ? 1 : 0;
@@ -139,10 +159,15 @@ public sealed partial class HomeView : UserControl
     {
         if ((sender as FrameworkElement)?.DataContext is RecentRepository entry)
         {
-            ViewModel?.RemoveRecent(entry.Path);
+            // Through the removal that also closes an open tab — an open tab would put a row
+            // straight back into the repository column and the strip.
+            ViewModel?.RemoveRepository(entry.Path);
             Bindings.Update();
         }
     }
+
+    /// <summary>Re-evaluates the captions and empty-state text after the shell changed the lists.</summary>
+    public void UpdateBindings() => Bindings.Update();
 
     private void Layout_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

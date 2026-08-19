@@ -133,11 +133,36 @@ public sealed class MainViewModel : ObservableObject
     public Visibility ToolbarVisibility => Mode == UiMode.Zen ? Visibility.Collapsed : Visibility.Visible;
 
     /// <summary>
-    ///  The status bar shows the selected repository's state, so it has nothing to say on Home, and
-    ///  Zen hides it with the rest of the chrome.
+    ///  The status bar stays up everywhere except Zen, which hides it with the rest of the chrome.
+    ///  On Home it shows the application's own facts (see <see cref="HomeStatus"/>) instead of a
+    ///  repository's, so the strip does not appear and vanish as tabs are switched.
     /// </summary>
     public Visibility StatusBarVisibility =>
-        SelectedRepository is not null && Mode != UiMode.Zen ? Visibility.Visible : Visibility.Collapsed;
+        Mode != UiMode.Zen ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>What the status bar reports while Home is selected: the shape of the collection.</summary>
+    public string HomeStatus
+    {
+        get
+        {
+            int known = RecentRepositories.Count;
+
+            if (known == 0)
+            {
+                return "No repositories yet";
+            }
+
+            string text = $"{known} {(known == 1 ? "repository" : "repositories")}";
+
+            if (Groups.Count > 0)
+            {
+                text += $" in {Groups.Count} {(Groups.Count == 1 ? "project" : "projects")}";
+            }
+
+            int open = Repositories.Count();
+            return open > 0 ? $"{text} · {open} open" : text;
+        }
+    }
 
     public bool IsZen => Mode == UiMode.Zen;
 
@@ -472,6 +497,10 @@ public sealed class MainViewModel : ObservableObject
 
         ReorderTabs();
         TabGroupsRebuilt?.Invoke(this, EventArgs.Empty);
+
+        // Every path that changes what Home's status line counts — opening, closing, importing,
+        // removing, regrouping — comes through here.
+        OnPropertyChanged(nameof(HomeStatus));
     }
 
     /// <summary>Builds the rows of one project: its repositories, open or not.</summary>
@@ -596,8 +625,22 @@ public sealed class MainViewModel : ObservableObject
         })
     ];
 
+    /// <summary>
+    ///  Takes a repository off the lists entirely, until it is opened or imported again. Its tab is
+    ///  closed first — an open tab would put a row straight back into the column and the strip.
+    /// </summary>
+    public void RemoveRepository(string path)
+    {
+        if (FindOpenTab(path) is RepositoryTabViewModel tab)
+        {
+            CloseTab(tab);
+        }
+
+        RemoveRecent(path);
+    }
+
     /// <summary>Drops a repository from the recent list without touching anything on disk.</summary>
-    public void RemoveRecent(string path)
+    private void RemoveRecent(string path)
     {
         string? existing = Recent.FirstOrDefault(candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase));
 

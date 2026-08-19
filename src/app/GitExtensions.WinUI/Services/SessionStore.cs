@@ -42,6 +42,9 @@ public sealed class SessionState
 
     public double HistoryDetailsWidth { get; set; } = 380;
 
+    /// <summary>Height of the bottom terminal pane.</summary>
+    public double TerminalPaneHeight { get; set; } = 280;
+
     public UiDensity Density { get; set; } = UiDensity.Comfortable;
 
     public WindowBounds? Window { get; set; }
@@ -241,6 +244,47 @@ internal static class SessionStore
     }
 
     /// <summary>
+    ///  Set once <see cref="Reset"/> has run. From then on <see cref="Save"/> is a no-op, so the
+    ///  window closing on the way to the restart cannot write back the state that was just deleted.
+    /// </summary>
+    private static bool _isReset;
+
+    /// <summary>
+    ///  Deletes every piece of stored state, so the next launch is a first run.
+    /// </summary>
+    /// <remarks>
+    ///  The legacy file goes too: leaving it would let <see cref="MigrateLegacySession"/> quietly
+    ///  resurrect the pre-rename state on the very launch that was supposed to be fresh. Repositories
+    ///  on disk and git configuration are not touched — this file is the only thing the app owns.
+    /// </remarks>
+    public static void Reset()
+    {
+        _isReset = true;
+
+        DeleteQuietly(SessionFilePath);
+        DeleteQuietly(SessionFilePath + ".tmp");
+        DeleteQuietly(Path.Combine(SessionDirectory, "restore-error.log"));
+        DeleteQuietly(Path.Combine(LegacyDirectory, "session.json"));
+    }
+
+    private static void DeleteQuietly(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception)
+        {
+            // A file that would not delete still loses to the suppressed save: the next launch may
+            // restore old state, but nothing worse. Each file is tried on its own so one refusal
+            // does not spare the rest.
+        }
+    }
+
+    /// <summary>
     ///  Writes the session, replacing the previous file only once the new one is complete.
     /// </summary>
     /// <remarks>
@@ -251,6 +295,11 @@ internal static class SessionStore
     /// </remarks>
     public static void Save(SessionState state)
     {
+        if (_isReset)
+        {
+            return;
+        }
+
         try
         {
             string path = SessionFilePath;

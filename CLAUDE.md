@@ -145,7 +145,13 @@ the installer and publish pipeline (no `BuildDependency` in `GitExtensions.slnx`
 - Session (open tabs, mode, window bounds) persists to
   `%LOCALAPPDATA%\GitExtensions.WinUI\session.json`; restore failures are recorded next to it in
   `restore-error.log` rather than silently leaving the shell looking like a first run.
-- There are no tests for this project yet; `Diff/HunkSplitter.cs` is the highest-value thing to cover.
+- The bottom terminal (Ctrl+`, `Views/TerminalPane` + `Terminal/`) runs real shells on **ConPTY**;
+  it is a transcript with a line editor, not a grid emulator — see the README's terminal section.
+  Two traps: a shell's exit is observed on its process handle (conhost never closes the output pipe),
+  and a ConPTY child only attaches when the parent has **no console**, so it cannot be exercised from
+  a console test runner — use a windowless harness.
+- There are no tests for this project yet; `Diff/HunkSplitter.cs` and `Terminal/TerminalOutputBuffer.cs`
+  are the highest-value things to cover (both pure string-in/string-out).
 - **Packaging lives in `setup/gitxen/`** (separate from `setup/installer`, which is the Git Extensions
   MSI) and is documented in its own README: `build/Build-Gitxen.ps1` produces the MSI, the portable
   zip, an optional MSIX and the rendered winget / Chocolatey / Scoop manifests, and
