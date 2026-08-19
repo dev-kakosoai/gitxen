@@ -183,6 +183,10 @@ should hold. Paging uses `--skip`, spliced into `RevisionReader`'s `revisionFilt
 **Session state** — open tabs, UI mode, window bounds, settings — persists to
 `%LOCALAPPDATA%\Gitxen\session.json`. Restore failures are written to `restore-error.log`
 beside it rather than leaving the shell silently looking like a first run. A session written by a build from before the rename is carried over from the old folder on first launch.
+Settings has a "Reset application" card that deletes all of this (including the legacy file, which
+would otherwise be silently migrated back) via `SessionStore.Reset()`, relaunches the executable and
+closes the window; `Reset()` also disarms `Save()` so the closing window cannot write the old state
+back. Repositories on disk and git configuration are untouched.
 
 ## The terminal
 

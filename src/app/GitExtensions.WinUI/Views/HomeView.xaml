@@ -12,7 +12,7 @@
         <DataTemplate x:Key="RecentRepositoryTemplate" x:DataType="models:RecentRepository">
             <!-- Fixed widths rather than a star column: a column after one is arranged off the
                  screen here. -->
-            <Grid ColumnDefinitions="Auto,320,420" ColumnSpacing="14" Padding="6,4">
+            <Grid ColumnDefinitions="Auto,320,420,Auto" ColumnSpacing="14" Padding="6,4">
                 <Grid.ContextFlyout>
                     <MenuFlyout>
                         <MenuFlyoutItem Text="Open" Click="OpenRecent_Click" />
@@ -50,50 +50,98 @@
                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                Visibility="{x:Bind MissingVisibility, Mode=OneWay}" />
                 </StackPanel>
+
+                <Button Grid.Column="3" Click="RemoveRecent_Click"
+                        Style="{StaticResource IconButtonStyle}" VerticalAlignment="Center"
+                        AutomationProperties.Name="Remove from list"
+                        ToolTipService.ToolTip="Remove from list">
+                    <FontIcon Glyph="&#xE711;" FontSize="{StaticResource IconSizeTiny}" />
+                </Button>
             </Grid>
         </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
         <!--
-            The mark as a watermark: full height, anchored to the right where Home's empty space is,
-            and behind everything at an opacity low enough that content scrolling over it stays
-            readable. Drawn in XAML shapes rather than the SVG because SvgImageSource's renderer does
-            not support the mask the SVG punches its centre node with; the geometry here matches
-            gitxen.svg, with the punch simulated by a circle in the gradient's midpoint colour.
+            An abstract background illustration: soft colour washes and flowing branch-like curves
+            with commit-node dots, in the brand hues, filling the empty right side of Home. Full
+            height, behind everything, and faint enough that content scrolling over it stays
+            readable — each element carries its own low opacity rather than one flat value, so the
+            washes stay barely-there while the lines keep a hint of definition.
         -->
         <Viewbox HorizontalAlignment="Right" VerticalAlignment="Stretch" Stretch="Uniform"
-                 Opacity="0.06" IsHitTestVisible="False">
-            <Grid Width="256" Height="256">
-                <Rectangle RadiusX="56" RadiusY="56">
-                    <Rectangle.Fill>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                 IsHitTestVisible="False">
+            <Canvas Width="720" Height="1000">
+
+                <!-- Soft colour washes for depth. Each fades to a transparent version of its own
+                     hue so the edge dissolves instead of greying out; the mid stop eases the
+                     falloff, and they are kept large and very faint because a small, stronger
+                     radial shows visible banding rings on the dark theme. -->
+                <Ellipse Width="760" Height="760" Canvas.Left="280" Canvas.Top="-280" Opacity="0.045">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
                             <GradientStop Offset="0" Color="#58A6FF" />
-                            <GradientStop Offset="1" Color="#A874FF" />
-                        </LinearGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
+                            <GradientStop Offset="0.55" Color="#5958A6FF" />
+                            <GradientStop Offset="1" Color="#0058A6FF" />
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <Ellipse Width="680" Height="680" Canvas.Left="220" Canvas.Top="540" Opacity="0.045">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Offset="0" Color="#A874FF" />
+                            <GradientStop Offset="0.55" Color="#59A874FF" />
+                            <GradientStop Offset="1" Color="#00A874FF" />
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <Ellipse Width="480" Height="480" Canvas.Left="50" Canvas.Top="250" Opacity="0.035">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Offset="0" Color="#808DFF" />
+                            <GradientStop Offset="0.55" Color="#59808DFF" />
+                            <GradientStop Offset="1" Color="#00808DFF" />
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
 
-                <Line X1="76.8" Y1="76.8" X2="179.2" Y2="179.2" Stroke="White" StrokeThickness="29.4"
+                <!-- The main line, weaving top to bottom through the fork point at 560,520. -->
+                <Path Data="M 600,-30 C 520,150 660,330 560,520 C 470,690 640,850 560,1040"
+                      Stroke="#58A6FF" StrokeThickness="3" Opacity="0.13"
                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                <Line X1="179.2" Y1="76.8" X2="76.8" Y2="179.2" Stroke="White" StrokeThickness="29.4"
+
+                <!-- A second line running loosely alongside it. -->
+                <Path Data="M 680,30 C 620,200 740,360 660,540 C 600,690 720,850 680,1040"
+                      Stroke="#A874FF" StrokeThickness="3" Opacity="0.11"
                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
 
-                <Ellipse Width="40" Height="40" Fill="White" Margin="56.8,56.8,0,0"
-                         HorizontalAlignment="Left" VerticalAlignment="Top" />
-                <Ellipse Width="40" Height="40" Fill="White" Margin="159.2,56.8,0,0"
-                         HorizontalAlignment="Left" VerticalAlignment="Top" />
-                <Ellipse Width="40" Height="40" Fill="White" Margin="56.8,159.2,0,0"
-                         HorizontalAlignment="Left" VerticalAlignment="Top" />
-                <Ellipse Width="40" Height="40" Fill="White" Margin="159.2,159.2,0,0"
-                         HorizontalAlignment="Left" VerticalAlignment="Top" />
+                <!-- A branch peeling off the fork point towards the lower left. -->
+                <Path Data="M 560,520 C 500,620 520,700 430,780 C 370,835 390,920 330,990"
+                      Stroke="#808DFF" StrokeThickness="3" Opacity="0.11"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
 
-                <Ellipse Width="34.8" Height="34.8" Fill="#808DFF" Margin="110.6,110.6,0,0"
-                         HorizontalAlignment="Left" VerticalAlignment="Top" />
-            </Grid>
+                <!-- A short dotted branch drifting into the middle space. -->
+                <Path Data="M 585,260 C 500,320 520,390 420,440"
+                      Stroke="#58A6FF" StrokeThickness="3" Opacity="0.11"
+                      StrokeDashArray="0.1 4" StrokeDashCap="Round"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+
+                <!-- Commit nodes: filled at the fork, rings at the branch tips, all centred on
+                     curve endpoints so they sit exactly on their lines. -->
+                <Ellipse Width="16" Height="16" Canvas.Left="552" Canvas.Top="512"
+                         Fill="#808DFF" Opacity="0.16" />
+                <Ellipse Width="14" Height="14" Canvas.Left="413" Canvas.Top="433"
+                         Stroke="#58A6FF" StrokeThickness="3" Opacity="0.14" />
+                <Ellipse Width="14" Height="14" Canvas.Left="323" Canvas.Top="983"
+                         Stroke="#808DFF" StrokeThickness="3" Opacity="0.14" />
+                <Ellipse Width="12" Height="12" Canvas.Left="654" Canvas.Top="534"
+                         Fill="#A874FF" Opacity="0.14" />
+                <Ellipse Width="10" Height="10" Canvas.Left="585" Canvas.Top="255"
+                         Fill="#58A6FF" Opacity="0.14" />
+            </Canvas>
         </Viewbox>
 
-        <ScrollViewer>
+        <ScrollViewer x:Name="MainContent">
         <StackPanel Padding="40,32,40,40" Spacing="28" MaxWidth="1080" HorizontalAlignment="Left">
 
             <StackPanel Spacing="6">
@@ -305,35 +353,78 @@
 
             <!--
                 Settings that are not about any one repository, so they should not require opening
-                one. The repository-scoped pages — Maintenance, the local half of Git config, the
+                one. Each card opens its own page over Home rather than expanding inline — a settings
+                page deserves the full width, and the lists above should not jump around underneath
+                it. The repository-scoped pages — Maintenance, the local half of Git config, the
                 status bar — stay inside the repository, where the thing they act on is.
             -->
             <StackPanel Spacing="10">
                 <TextBlock Text="Settings" Style="{StaticResource SectionCaptionStyle}" />
 
-                <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                          Expanding="AppSettings_Expanding">
-                    <Expander.Header>
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE713;" FontSize="{StaticResource IconSizeMedium}" />
-                            <TextBlock Text="Application settings" />
-                        </StackPanel>
-                    </Expander.Header>
-                    <views:SettingsView x:Name="AppSettings" />
-                </Expander>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Click="OpenAppSettings_Click" Padding="14,12">
+                        <Grid ColumnDefinitions="Auto,250,Auto" ColumnSpacing="12">
+                            <FontIcon Glyph="&#xE713;" FontSize="{StaticResource IconSizeLarge}"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="Application settings" FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                           Text="Theme, density, performance limits, reset" />
+                            </StackPanel>
+                            <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="{StaticResource IconSizeSmall}"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        </Grid>
+                    </Button>
 
-                <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                          Expanding="GlobalConfig_Expanding">
-                    <Expander.Header>
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE9F5;" FontSize="{StaticResource IconSizeMedium}" />
-                            <TextBlock Text="Git configuration for all repositories" />
-                        </StackPanel>
-                    </Expander.Header>
-                    <views:GitConfigView x:Name="GlobalConfig" />
-                </Expander>
+                    <Button Click="OpenGitConfig_Click" Padding="14,12">
+                        <Grid ColumnDefinitions="Auto,250,Auto" ColumnSpacing="12">
+                            <FontIcon Glyph="&#xE9F5;" FontSize="{StaticResource IconSizeLarge}"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="Git configuration" FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                           Text="Identity and defaults for all repositories" />
+                            </StackPanel>
+                            <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="{StaticResource IconSizeSmall}"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        </Grid>
+                    </Button>
+                </StackPanel>
             </StackPanel>
         </StackPanel>
         </ScrollViewer>
+
+        <!--
+            Home's sub-pages. Swapped by visibility like every other section in the app, so a
+            half-edited identity or a scroll position survives going back and forth. Each page
+            carries its own title and scrolling; the strip here is only the way back.
+        -->
+        <Grid x:Name="SettingsPage" Visibility="Collapsed" RowDefinitions="Auto,*">
+            <StackPanel Orientation="Horizontal" Spacing="8" Padding="12,12,20,0">
+                <Button Click="BackToHome_Click" Style="{StaticResource IconButtonStyle}"
+                        AutomationProperties.Name="Back to Home" ToolTipService.ToolTip="Back to Home">
+                    <FontIcon Glyph="&#xE72B;" FontSize="{StaticResource IconSizeMedium}" />
+                </Button>
+                <TextBlock Text="Home" VerticalAlignment="Center"
+                           Style="{StaticResource PageSubtitleStyle}" />
+            </StackPanel>
+            <views:SettingsView Grid.Row="1" x:Name="AppSettings" />
+        </Grid>
+
+        <Grid x:Name="GitConfigPage" Visibility="Collapsed" RowDefinitions="Auto,*">
+            <StackPanel Orientation="Horizontal" Spacing="8" Padding="12,12,20,0">
+                <Button Click="BackToHome_Click" Style="{StaticResource IconButtonStyle}"
+                        AutomationProperties.Name="Back to Home" ToolTipService.ToolTip="Back to Home">
+                    <FontIcon Glyph="&#xE72B;" FontSize="{StaticResource IconSizeMedium}" />
+                </Button>
+                <TextBlock Text="Home" VerticalAlignment="Center"
+                           Style="{StaticResource PageSubtitleStyle}" />
+            </StackPanel>
+            <views:GitConfigView Grid.Row="1" x:Name="GlobalConfig" />
+        </Grid>
     </Grid>
 </UserControl>

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using GitExtensions.WinUI.Services;
 using GitExtensions.WinUI.Theming;
 using Microsoft.UI.Xaml;
@@ -89,5 +90,48 @@ public sealed partial class SettingsView : RepositoryPage
         {
             AppOptions.MaxDiffLines = (int)args.NewValue;
         }
+    }
+
+    /// <summary>
+    ///  Resets the application to a first run: confirm, wipe the stored state, relaunch, close.
+    /// </summary>
+    /// <remarks>
+    ///  The new process is started before the window closes. It launches into an already-emptied
+    ///  state directory, and <see cref="SessionStore.Reset"/> has disarmed <c>Save</c>, so the closing
+    ///  window's final save cannot write the old session back in between.
+    /// </remarks>
+    private async void Reset_Click(object sender, RoutedEventArgs e)
+    {
+        ContentDialog dialog = new()
+        {
+            Title = "Reset Gitxen?",
+            Content = new TextBlock
+            {
+                Text = "This closes every tab and clears projects, recent repositories, layout and "
+                    + "all settings. Gitxen restarts as a first run.\n\n"
+                    + "Your repositories on disk and your git configuration are not touched.",
+                TextWrapping = TextWrapping.Wrap
+            },
+            PrimaryButtonText = "Reset and restart",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        SessionStore.Reset();
+
+        if (Environment.ProcessPath is string executable)
+        {
+            Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true });
+        }
+
+        // Through the window rather than Application.Exit, so the Closed handler still runs — it is
+        // what shuts the terminal shells down.
+        App.Shell?.Close();
     }
 }

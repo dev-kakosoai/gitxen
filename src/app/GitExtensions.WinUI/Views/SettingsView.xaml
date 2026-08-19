@@ -153,6 +153,24 @@
             </Border>
 
             <!--
+                Starting over. Everything the app remembers lives in one session file, so a reset is
+                a genuine first run — including the setup wizard — rather than a partial cleanup.
+            -->
+            <Border Style="{StaticResource CardBorderStyle}" Padding="16">
+                <Grid ColumnDefinitions="Auto,440,180" ColumnSpacing="14">
+                    <FontIcon Glyph="&#xE7A7;" FontSize="{StaticResource IconSizeLarge}" VerticalAlignment="Center"
+                              Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="Reset application" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource PageSubtitleStyle}" TextWrapping="Wrap"
+                                   Text="Clears open tabs, projects, recent repositories and every setting, then restarts as a first run. Repositories on disk are not touched." />
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="Reset…" MinWidth="140" VerticalAlignment="Center"
+                            HorizontalAlignment="Right" Click="Reset_Click" />
+                </Grid>
+            </Border>
+
+            <!--
                 The licence and the derivation are stated in the application itself, not only in a file
                 in the repository: GPL-3.0 expects an interactive program to keep showing the notices
                 the original carried, and someone running a build has no other way to find out where it

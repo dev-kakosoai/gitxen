@@ -395,11 +395,14 @@ public sealed partial class MainWindow : Window
         ViewModel.AssignToGroup(row.Path, section.Group);
     }
 
-    private void CloseRepository_Click(object sender, RoutedEventArgs e)
+    private void RemoveRepository_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: SidebarRow { OpenTab: RepositoryTabViewModel tab } })
+        if (sender is Button { Tag: SidebarRow { IsHome: false } row })
         {
-            ViewModel.CloseTab(tab);
+            ViewModel.RemoveRepository(row.Path);
+
+            // Home's captions and empty-state text are x:Bind projections that only move when told.
+            Home.UpdateBindings();
         }
     }
 
