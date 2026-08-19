@@ -128,6 +128,7 @@ MainWindow            shell: custom title bar, repo tab strip, empty state
 | `Services/` | `RepositoryLoader` — every git command for an existing repository, split across two files (operations, and `.Objects.cs` for the structured listings). `RepositoryCreator` — clone and init, which run in a parent directory. |
 | `Models/` | Records the pages bind to: `BranchInfo`, `RemoteInfo`, `TagInfo`, `StashInfo`, `SubmoduleInfo`, `WorktreeInfo`, `ReflogEntry`, plus `RevisionQuery` and the operation option records. |
 | `Diff/` | `DiffParser` (raw diff to rows), `HunkSplitter` (raw diff to applicable patches), `SyntaxHighlighter`. |
+| `Terminal/` | The bottom terminal's engine: `ConPtySession` (a shell on a Windows pseudoconsole), `TerminalOutputBuffer` (VT stream back to plain lines), `TerminalSession` (one running shell), `TerminalShells` (which shells are installed). |
 | `Assets/` | The Gitxen mark. `gitxen.svg` is the vector master; the PNGs beside it are rendered from the same geometry, and `gitxen.ico` bundles them for the shell. |
 
 The tab strip is a `TabView` with no content: the repository view is hosted in its own grid row
@@ -183,6 +184,38 @@ should hold. Paging uses `--skip`, spliced into `RevisionReader`'s `revisionFilt
 `%LOCALAPPDATA%\Gitxen\session.json`. Restore failures are written to `restore-error.log`
 beside it rather than leaving the shell silently looking like a first run. A session written by a build from before the rename is carried over from the old folder on first launch.
 
+## The terminal
+
+Ctrl+` (or the command-bar button) docks a terminal under whichever section is showing —
+`Views/TerminalPane` hosted in `RepositoryView`. It offers whatever shells the machine actually has
+(PowerShell 7, Windows PowerShell, cmd, Git Bash, WSL — probed by `Terminal/TerminalShells`), opens
+sessions on the repository's working directory, and keeps several sessions at once. Like the panel in
+an editor, the pane is shared across repository tabs; a session stays in the directory it was opened
+on and says so in its title.
+
+Each session runs its shell on a **ConPTY** (`Terminal/ConPtySession`), not on redirected stdio: a
+shell behind plain pipes knows it is not interactive — PowerShell stops prompting, bash drops its
+profile — while behind a pseudoconsole it behaves exactly as it does in Windows Terminal. The cost is
+that ConPTY output is a VT stream, and `Terminal/TerminalOutputBuffer` turns that back into plain
+lines. It is a **transcript, not a character-grid emulator**: carriage-return overwrites, backspace,
+erase sequences and cursor-positioning-as-line-break are honoured, colours are dropped, and
+full-screen programs (vim, htop) degrade to appended text — they belong in a real terminal via
+"Open in". Commands are typed into a line editor under the transcript; Enter sends the line, Up/Down
+recall history, Ctrl+C in the empty box interrupts.
+
+Two things about ConPTY that are not obvious:
+
+- **The shell exiting does not close the output pipe** — conhost holds the write end until the
+  pseudoconsole is closed, so `ConPtySession` watches the process handle for exit rather than
+  waiting for EOF.
+- **Testing it needs a console-less parent.** Under a parent that already has a console (a test
+  runner, `dotnet run`), the child attaches to that console instead of the pseudoconsole and the
+  PTY sees nothing; the same code works correctly in this app because it is a GUI process. A
+  windowless harness is the only honest way to exercise it outside the app.
+
+The pane height persists like the other dragged panes (`AppOptions.TerminalPaneHeight`). Sessions are
+ended explicitly when the window closes, so no shell outlives the app.
+
 ## A layout constraint you will hit
 
 **In this app, a `Grid` column placed after a star-sized column is arranged off the right of the
@@ -221,11 +254,13 @@ checkout, copy). Reflog with recovery actions. Conflict resolution: a side per f
 and mark it done. Paused merges, rebases and cherry-picks are detected and shown as a banner with
 their own continue/skip/abort. Branches (local and remote), Remotes, Tags, Stashes,
 Submodules, Worktrees, Maintenance, Settings. Fetch / pull / push with options, and continue/abort for
-a paused merge, rebase, cherry-pick or revert.
+a paused merge, rebase, cherry-pick or revert. A dockable bottom terminal (Ctrl+`) with real shells
+on ConPTY — PowerShell, cmd, Git Bash, WSL — described above.
 
 ## What is not
 
-Interactive rebase, real Blame and File-history views (both are raw text in a dialog), a file tree,
+A character-grid terminal (the pane is a transcript; full-screen TUI programs degrade),
+interactive rebase, real Blame and File-history views (both are raw text in a dialog), a file tree,
 word-level diff highlighting, drag-and-drop on the commit graph, format-patch and apply-patch,
 sparse checkout, submodule add/remove, GPG, LFS, the plugin host, localization (this front-end is
 English-only and not wired to ResourceManager), the full settings tree, credential handling, and

@@ -1,0 +1,79 @@
+<UserControl
+    x:Class="GitExtensions.WinUI.Views.TerminalPane"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:terminal="using:GitExtensions.WinUI.Terminal"
+    HorizontalContentAlignment="Stretch"
+    VerticalContentAlignment="Stretch">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- One left-aligned run, like every other toolbar here: content pinned to the right of a
+             full-width bar does not paint in this app. -->
+        <Grid Grid.Row="0" Padding="12,4,12,4">
+            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left"
+                        VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE756;" FontSize="{StaticResource IconSizeSmall}"
+                          VerticalAlignment="Center" />
+                <TextBlock Text="Terminal" FontWeight="SemiBold" VerticalAlignment="Center" />
+
+                <ComboBox x:Name="SessionPicker" MinWidth="200" VerticalAlignment="Center"
+                          ItemsSource="{x:Bind Sessions}"
+                          SelectionChanged="SessionPicker_SelectionChanged"
+                          ToolTipService.ToolTip="Open terminal sessions">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="terminal:TerminalSession">
+                            <TextBlock Text="{x:Bind Title}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <DropDownButton ToolTipService.ToolTip="Open a new terminal session">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE710;" FontSize="{StaticResource IconSizeSmall}" />
+                        <TextBlock Text="New" />
+                    </StackPanel>
+                    <DropDownButton.Flyout>
+                        <MenuFlyout x:Name="ShellFlyout" Placement="Bottom" />
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+
+                <AppBarSeparator />
+
+                <Button Click="Interrupt_Click" ToolTipService.ToolTip="Interrupt the running command (Ctrl+C)">
+                    <FontIcon Glyph="&#xE71A;" FontSize="{StaticResource IconSizeSmall}" />
+                </Button>
+                <Button Click="Clear_Click" ToolTipService.ToolTip="Clear the output">
+                    <FontIcon Glyph="&#xEA99;" FontSize="{StaticResource IconSizeSmall}" />
+                </Button>
+                <Button Click="CloseSession_Click" ToolTipService.ToolTip="End this session">
+                    <FontIcon Glyph="&#xE74D;" FontSize="{StaticResource IconSizeSmall}" />
+                </Button>
+                <Button Click="ClosePane_Click" ToolTipService.ToolTip="Hide the terminal (Ctrl+`)">
+                    <FontIcon Glyph="&#xE70D;" FontSize="{StaticResource IconSizeSmall}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" x:Name="OutputScroller" Padding="12,0,12,4"
+                      HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto"
+                      SizeChanged="OutputScroller_SizeChanged">
+            <TextBlock x:Name="OutputText"
+                       FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                       IsTextSelectionEnabled="True"
+                       TextWrapping="NoWrap" />
+        </ScrollViewer>
+
+        <!-- The star column is last, per the layout constraint this app lives with. -->
+        <Grid Grid.Row="2" Padding="12,4,12,8" ColumnSpacing="8" ColumnDefinitions="Auto,*">
+            <FontIcon Grid.Column="0" Glyph="&#xE76C;" FontSize="{StaticResource IconSizeSmall}"
+                      Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                      VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="InputBox"
+                     FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                     PlaceholderText="Type a command — Enter runs it; Up and Down recall history"
+                     KeyDown="InputBox_KeyDown"
+                     AutomationProperties.Name="Terminal command" />
+        </Grid>
+    </Grid>
+</UserControl>

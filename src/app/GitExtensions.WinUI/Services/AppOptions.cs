@@ -88,6 +88,9 @@ public static class AppOptions
     /// <summary>Width of the commit-details pane on the History page.</summary>
     public static double HistoryDetailsWidth { get; set; } = 380;
 
+    /// <summary>Height of the bottom terminal pane.</summary>
+    public static double TerminalPaneHeight { get; set; } = 280;
+
     /// <summary>Row spacing for the object lists and the commit graph.</summary>
     public static UiDensity Density { get; set; } = UiDensity.Comfortable;
 
@@ -101,6 +104,7 @@ public static class AppOptions
         Layout = state.Layout;
         StagingPaneWidth = Math.Clamp(state.StagingPaneWidth, 300, 800);
         HistoryDetailsWidth = Math.Clamp(state.HistoryDetailsWidth, 260, 900);
+        TerminalPaneHeight = Math.Clamp(state.TerminalPaneHeight, 140, 700);
         Density = state.Density;
     }
 
@@ -113,6 +117,7 @@ public static class AppOptions
         state.Layout = Layout;
         state.StagingPaneWidth = StagingPaneWidth;
         state.HistoryDetailsWidth = HistoryDetailsWidth;
+        state.TerminalPaneHeight = TerminalPaneHeight;
         state.Density = Density;
     }
 }

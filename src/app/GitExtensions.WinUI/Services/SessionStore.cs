@@ -42,6 +42,9 @@ public sealed class SessionState
 
     public double HistoryDetailsWidth { get; set; } = 380;
 
+    /// <summary>Height of the bottom terminal pane.</summary>
+    public double TerminalPaneHeight { get; set; } = 280;
+
     public UiDensity Density { get; set; } = UiDensity.Comfortable;
 
     public WindowBounds? Window { get; set; }
