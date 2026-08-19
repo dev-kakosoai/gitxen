@@ -61,7 +61,7 @@
         </StackPanel>
 
         <!-- How many repositories the app knows about, mirroring what the Home page lists. -->
-        <TextBlock Grid.Column="1" Margin="11,0" VerticalAlignment="Center"
+        <TextBlock Grid.Column="1" Margin="11,0,44,0" VerticalAlignment="Center"
                    FontSize="{StaticResource FontSizeBody}"
                    Foreground="{ThemeResource TextOnAccentFillColorSecondaryBrush}"
                    Text="{x:Bind Shell.HomeStatus, Mode=OneWay}"
@@ -140,11 +140,21 @@
         </StackPanel>
 
         <!-- The commit count or the last error, dimmed so the segments stay the focus. -->
-        <TextBlock Grid.Column="1" Margin="11,0" VerticalAlignment="Center"
+        <TextBlock Grid.Column="1" Margin="11,0,44,0" VerticalAlignment="Center"
                    FontSize="{StaticResource FontSizeBody}"
                    Foreground="{ThemeResource TextOnAccentFillColorSecondaryBrush}"
                    Text="{x:Bind Tab.Status, Mode=OneWay}"
                    TextTrimming="CharacterEllipsis"
                    Visibility="{x:Bind WhenRepository(Tab), Mode=OneWay}" />
+
+        <!-- The one segment both sides share: the git activity console. Right-aligned inside the
+             star cell rather than given a column of its own — a column after a star-sized one is
+             arranged off-screen in this app (see the README); the texts above leave it room. -->
+        <Button Grid.Column="1" Style="{StaticResource SegmentStyle}" HorizontalAlignment="Right"
+                Click="Console_Click"
+                AutomationProperties.Name="Git activity console"
+                ToolTipService.ToolTip="Git activity console (F12)">
+            <FontIcon Glyph="&#xE756;" Style="{StaticResource SegmentGlyphStyle}" />
+        </Button>
     </Grid>
 </UserControl>

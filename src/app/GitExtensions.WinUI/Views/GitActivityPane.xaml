@@ -1,0 +1,55 @@
+<UserControl
+    x:Class="GitExtensions.WinUI.Views.GitActivityPane"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:logging="using:GitCommands.Logging">
+
+    <Grid RowDefinitions="Auto,*,Auto"
+          BorderThickness="0,1,0,0"
+          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+          Background="{ThemeResource LayerFillColorDefaultBrush}">
+
+        <!-- One cell, close button right-aligned within it, rather than columns: a column after a
+             star-sized one is arranged off-screen in this app (see the README). -->
+        <Grid Padding="12,4,4,4">
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <TextBlock Text="Git activity" Style="{StaticResource SectionCaptionStyle}"
+                           VerticalAlignment="Center" />
+                <TextBlock Text="Every command the app runs, newest last. Select one for its detail."
+                           Style="{StaticResource PageSubtitleStyle}" VerticalAlignment="Center" />
+                <Button Click="Clear_Click" Padding="8,2" FontSize="{StaticResource FontSizeCaption}"
+                        VerticalAlignment="Center" ToolTipService.ToolTip="Clear the log">
+                    <TextBlock Text="Clear" />
+                </Button>
+            </StackPanel>
+
+            <Button Click="Close_Click" Style="{StaticResource IconButtonStyle}"
+                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                    AutomationProperties.Name="Close the console" ToolTipService.ToolTip="Close (F12)">
+                <FontIcon Glyph="&#xE711;" FontSize="{StaticResource IconSizeTiny}" />
+            </Button>
+        </Grid>
+
+        <ListView Grid.Row="1" x:Name="List" SelectionMode="Single" Padding="8,0"
+                  SelectionChanged="List_SelectionChanged"
+                  ItemContainerStyle="{StaticResource DenseListViewItemStyle}">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="logging:CommandLogEntry">
+                    <TextBlock Text="{x:Bind ColumnLine}"
+                               FontFamily="Cascadia Mono, Consolas" FontSize="{StaticResource FontSizeCaption}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTipService.ToolTip="{x:Bind CommandLine}" />
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- The selected command in full: arguments, working directory, exit code, captured error. -->
+        <TextBox Grid.Row="2" x:Name="DetailBox" IsReadOnly="True" AcceptsReturn="True"
+                 Height="110" Visibility="Collapsed"
+                 FontFamily="Cascadia Mono, Consolas" FontSize="{StaticResource FontSizeCaption}"
+                 TextWrapping="NoWrap" BorderThickness="0,1,0,0" CornerRadius="0"
+                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+    </Grid>
+</UserControl>

@@ -135,6 +135,18 @@ The tab strip is a `TabView` with no content: the repository view is hosted in i
 instead, because `TabView` arranges its content at the content's desired size rather than filling the
 space, which left short pages floating in a fraction of the window.
 
+The strip lists only Home and the **open** repositories. It briefly listed every known repository,
+which broke closing: the closed repository's row stayed in the strip, `TabView` coerced its selection
+onto that row after the rebuild, and the selection handler read that as a click and reopened it. The
+repository column still lists everything (open rows carry a close cross; remove-from-list is on the
+row's context menu), and it collapses to a slim rail via the chevron in its header — the collapsed
+state persists in the session.
+
+F12 (or the console button at the right end of the status bar) toggles the git activity pane
+(`Views/GitActivityPane`), a live view of `GitCommands.Logging.CommandLog` — every process the app
+launches, with the selected entry's arguments, working directory, duration, exit code and captured
+error. Standard output is deliberately not captured by that log; it is shown where it is consumed.
+
 Sections are switched by visibility rather than navigated to in a `Frame`. A `Frame` recreates its
 page on every visit, which would discard the commit list's scroll position and any half-typed commit
 message.

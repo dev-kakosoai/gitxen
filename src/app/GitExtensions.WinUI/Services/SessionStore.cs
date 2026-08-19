@@ -37,6 +37,9 @@ public sealed class SessionState
     /// <summary>Width of the repository column, in effective pixels.</summary>
     public double SidebarWidth { get; set; } = 280;
 
+    /// <summary>Whether the repository column was collapsed to its rail.</summary>
+    public bool SidebarCollapsed { get; set; }
+
     /// <summary>Dragged pane widths, shared by every tab. See AppOptions for why they are not per-repository.</summary>
     public double StagingPaneWidth { get; set; } = 400;
 

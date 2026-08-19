@@ -57,10 +57,13 @@ public sealed class SidebarRow
     public FontWeight TitleWeight => IsOpen ? FontWeights.SemiBold : FontWeights.Normal;
 
     /// <summary>
-    ///  Every repository row carries the remove cross — pressing it takes the repository off the
-    ///  lists, closing its tab first when it is open. Home is the one row that cannot leave.
+    ///  Every repository row can be removed from the lists — closing its tab first when it is open.
+    ///  Home is the one row that cannot leave.
     /// </summary>
     public Visibility RemoveVisibility => IsHome ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>The close cross belongs only to rows that stand for an open tab.</summary>
+    public Visibility CloseVisibility => IsOpen ? Visibility.Visible : Visibility.Collapsed;
 
     public Brush Accent => Group?.Accent ?? GroupPalette.Accent("Slate");
 

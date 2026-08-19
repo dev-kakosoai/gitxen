@@ -485,12 +485,15 @@ public sealed class MainViewModel : ObservableObject
             TabGroups.Add(ungrouped);
         }
 
-        // The strip carries every row too — including those of collapsed projects, since collapsing
-        // is a statement about the column's space, not about the repositories.
+        // The strip carries only Home and the OPEN repositories, in project order. It used to list
+        // every known repository too, but that broke closing: the closed repository's row stayed in
+        // the strip, the TabView coerced its selection onto that row after the rebuild, and the
+        // selection handler read that as a click and reopened the repository just closed. Tabs mean
+        // open things; the column and Home are where the rest of the collection lives.
         StripRows.Clear();
         StripRows.Add(SidebarRow.ForHome());
 
-        foreach (SidebarRow row in allRows)
+        foreach (SidebarRow row in allRows.Where(row => row.IsOpen))
         {
             StripRows.Add(row);
         }

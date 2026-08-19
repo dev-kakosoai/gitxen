@@ -101,6 +101,12 @@ public sealed partial class StatusBar : UserControl
     /// <summary>Raised with a navigation tag when a segment asks for its section.</summary>
     public event EventHandler<string>? SectionRequested;
 
+    /// <summary>Raised when the console segment asks for the git activity pane.</summary>
+    public event EventHandler? ConsoleRequested;
+
+    private void Console_Click(object sender, RoutedEventArgs e) =>
+        ConsoleRequested?.Invoke(this, EventArgs.Empty);
+
     private void Branch_Click(object sender, RoutedEventArgs e) => SectionRequested?.Invoke(this, "branches");
 
     private void Changes_Click(object sender, RoutedEventArgs e) => SectionRequested?.Invoke(this, "changes");

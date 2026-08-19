@@ -111,10 +111,16 @@ public sealed partial class MainWindow : Window
         // the shell looking like a first run. Record it instead.
         try
         {
-            // The column keeps whatever width it was dragged to.
+            // The column keeps whatever width it was dragged to, and whether it was collapsed.
             if (state.SidebarWidth > 120)
             {
                 Sidebar.Width = state.SidebarWidth;
+                _expandedSidebarWidth = state.SidebarWidth;
+            }
+
+            if (state.SidebarCollapsed)
+            {
+                SetSidebarCollapsed(true);
             }
 
             if (state.Window is WindowBounds bounds && bounds.Width > 0 && bounds.Height > 0)
@@ -206,7 +212,11 @@ public sealed partial class MainWindow : Window
         });
 
         AppOptions.CopyTo(state);
-        state.SidebarWidth = Sidebar.Width;
+
+        // The collapsed rail's 40px must never be recorded as the column's width, or expanding
+        // after a restart would give back a sliver.
+        state.SidebarWidth = _sidebarCollapsed ? _expandedSidebarWidth : Sidebar.Width;
+        state.SidebarCollapsed = _sidebarCollapsed;
         state.HasCompletedSetup = _hasCompletedSetup;
         SessionStore.Save(state);
     }
@@ -395,15 +405,59 @@ public sealed partial class MainWindow : Window
         ViewModel.AssignToGroup(row.Path, section.Group);
     }
 
+    /// <summary>Closes an open repository's tab from its row in the column, list intact.</summary>
+    private void CloseRepository_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is SidebarRow { OpenTab: RepositoryTabViewModel tab })
+        {
+            ViewModel.CloseTab(tab);
+        }
+    }
+
     private void RemoveRepository_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: SidebarRow { IsHome: false } row })
+        // FrameworkElement rather than Button: this also arrives from the row's context menu item.
+        if ((sender as FrameworkElement)?.Tag is SidebarRow { IsHome: false } row)
         {
             ViewModel.RemoveRepository(row.Path);
 
             // Home's captions and empty-state text are x:Bind projections that only move when told.
             Home.UpdateBindings();
         }
+    }
+
+    // ---- Sidebar collapse ------------------------------------------------------------------------
+
+    /// <summary>The width to give back on expand; the collapsed rail overwrites Sidebar.Width.</summary>
+    private double _expandedSidebarWidth = 280;
+
+    private bool _sidebarCollapsed;
+
+    private void CollapseSidebar_Click(object sender, RoutedEventArgs e) => SetSidebarCollapsed(true);
+
+    private void ExpandSidebar_Click(object sender, RoutedEventArgs e) => SetSidebarCollapsed(false);
+
+    private void SetSidebarCollapsed(bool collapsed)
+    {
+        if (collapsed && !_sidebarCollapsed)
+        {
+            _expandedSidebarWidth = Sidebar.Width;
+        }
+
+        _sidebarCollapsed = collapsed;
+        SidebarExpanded.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        SidebarRail.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
+        Sidebar.Width = collapsed ? 40 : _expandedSidebarWidth;
+    }
+
+    // ---- Git activity console --------------------------------------------------------------------
+
+    private void StatusBar_ConsoleRequested(object? sender, EventArgs e) => GitConsole.Toggle();
+
+    private void ConsoleAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        GitConsole.Toggle();
     }
 
     /// <summary>
@@ -594,6 +648,7 @@ public sealed partial class MainWindow : Window
             ("Ctrl+Enter", "Commit (on the Changes page)"),
             ("Ctrl+F", "Filter commits (on the History page)"),
             ("Ctrl+`", "Toggle the terminal"),
+            ("F12", "Git activity console"),
             ("F1", "This list"),
             ("Escape", "Leave Zen mode")
         ];

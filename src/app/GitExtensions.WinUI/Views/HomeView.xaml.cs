@@ -36,6 +36,11 @@ public sealed partial class HomeView : UserControl
     public HomeView()
     {
         InitializeComponent();
+
+        // The ambient background motion. Started from code because a XAML EventTrigger cannot say
+        // "when loaded, begin this keyed resource"; Begin on an already-running storyboard restarts
+        // it, which is invisible at these speeds.
+        Loaded += (_, _) => ((Microsoft.UI.Xaml.Media.Animation.Storyboard)Resources["BackgroundMotion"]).Begin();
     }
 
     /// <summary>Raised when the page wants the shell to run one of its actions.</summary>
@@ -110,6 +115,9 @@ public sealed partial class HomeView : UserControl
         SettingsPage.Visibility = ReferenceEquals(page, SettingsPage) ? Visibility.Visible : Visibility.Collapsed;
         GitConfigPage.Visibility = ReferenceEquals(page, GitConfigPage) ? Visibility.Visible : Visibility.Collapsed;
         MainContent.Visibility = page is null ? Visibility.Visible : Visibility.Collapsed;
+
+        // The hints belong to the empty Home; behind a settings form they are just noise.
+        ShortcutHints.Visibility = page is null ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void SyncLayoutBox() =>

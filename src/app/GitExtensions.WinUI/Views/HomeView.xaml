@@ -8,6 +8,43 @@
     VerticalContentAlignment="Stretch">
 
     <UserControl.Resources>
+        <!--
+            Ambient motion for the background illustration: the curve layer drifts a few pixels and
+            the washes breathe, out of phase so the movement never reads as a cycle. Everything here
+            is an independent animation (opacity, transforms) — it runs on the composition thread
+            and costs the UI thread nothing.
+        -->
+        <Storyboard x:Key="BackgroundMotion">
+            <DoubleAnimation Storyboard.TargetName="CurveDrift" Storyboard.TargetProperty="Y"
+                             From="-10" To="10" Duration="0:0:18"
+                             AutoReverse="True" RepeatBehavior="Forever">
+                <DoubleAnimation.EasingFunction>
+                    <SineEase EasingMode="EaseInOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WashBlue" Storyboard.TargetProperty="Opacity"
+                             From="0.03" To="0.06" Duration="0:0:9"
+                             AutoReverse="True" RepeatBehavior="Forever">
+                <DoubleAnimation.EasingFunction>
+                    <SineEase EasingMode="EaseInOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WashPurple" Storyboard.TargetProperty="Opacity"
+                             From="0.055" To="0.03" Duration="0:0:11"
+                             AutoReverse="True" RepeatBehavior="Forever">
+                <DoubleAnimation.EasingFunction>
+                    <SineEase EasingMode="EaseInOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WashIndigo" Storyboard.TargetProperty="Opacity"
+                             From="0.025" To="0.045" Duration="0:0:13"
+                             AutoReverse="True" RepeatBehavior="Forever">
+                <DoubleAnimation.EasingFunction>
+                    <SineEase EasingMode="EaseInOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
         <!-- One repository row, shared by every group list and the ungrouped list. -->
         <DataTemplate x:Key="RecentRepositoryTemplate" x:DataType="models:RecentRepository">
             <!-- Fixed widths rather than a star column: a column after one is arranged off the
@@ -77,7 +114,7 @@
                      hue so the edge dissolves instead of greying out; the mid stop eases the
                      falloff, and they are kept large and very faint because a small, stronger
                      radial shows visible banding rings on the dark theme. -->
-                <Ellipse Width="760" Height="760" Canvas.Left="280" Canvas.Top="-280" Opacity="0.045">
+                <Ellipse x:Name="WashBlue" Width="760" Height="760" Canvas.Left="280" Canvas.Top="-280" Opacity="0.045">
                     <Ellipse.Fill>
                         <RadialGradientBrush>
                             <GradientStop Offset="0" Color="#58A6FF" />
@@ -86,7 +123,7 @@
                         </RadialGradientBrush>
                     </Ellipse.Fill>
                 </Ellipse>
-                <Ellipse Width="680" Height="680" Canvas.Left="220" Canvas.Top="540" Opacity="0.045">
+                <Ellipse x:Name="WashPurple" Width="680" Height="680" Canvas.Left="220" Canvas.Top="540" Opacity="0.045">
                     <Ellipse.Fill>
                         <RadialGradientBrush>
                             <GradientStop Offset="0" Color="#A874FF" />
@@ -95,7 +132,7 @@
                         </RadialGradientBrush>
                     </Ellipse.Fill>
                 </Ellipse>
-                <Ellipse Width="480" Height="480" Canvas.Left="50" Canvas.Top="250" Opacity="0.035">
+                <Ellipse x:Name="WashIndigo" Width="480" Height="480" Canvas.Left="50" Canvas.Top="250" Opacity="0.035">
                     <Ellipse.Fill>
                         <RadialGradientBrush>
                             <GradientStop Offset="0" Color="#808DFF" />
@@ -105,41 +142,112 @@
                     </Ellipse.Fill>
                 </Ellipse>
 
-                <!-- The main line, weaving top to bottom through the fork point at 560,520. -->
-                <Path Data="M 600,-30 C 520,150 660,330 560,520 C 470,690 640,850 560,1040"
-                      Stroke="#58A6FF" StrokeThickness="3" Opacity="0.13"
-                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                <!-- The curves and their nodes drift together — one layer, one transform — so the
+                     nodes never slide off their lines. -->
+                <Canvas>
+                    <Canvas.RenderTransform>
+                        <TranslateTransform x:Name="CurveDrift" />
+                    </Canvas.RenderTransform>
 
-                <!-- A second line running loosely alongside it. -->
-                <Path Data="M 680,30 C 620,200 740,360 660,540 C 600,690 720,850 680,1040"
-                      Stroke="#A874FF" StrokeThickness="3" Opacity="0.11"
-                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <!-- The main line, weaving top to bottom through the fork point at 560,520. -->
+                    <Path Data="M 600,-30 C 520,150 660,330 560,520 C 470,690 640,850 560,1040"
+                          Stroke="#58A6FF" StrokeThickness="3" Opacity="0.13"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
 
-                <!-- A branch peeling off the fork point towards the lower left. -->
-                <Path Data="M 560,520 C 500,620 520,700 430,780 C 370,835 390,920 330,990"
-                      Stroke="#808DFF" StrokeThickness="3" Opacity="0.11"
-                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <!-- A second line running loosely alongside it. -->
+                    <Path Data="M 680,30 C 620,200 740,360 660,540 C 600,690 720,850 680,1040"
+                          Stroke="#A874FF" StrokeThickness="3" Opacity="0.11"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
 
-                <!-- A short dotted branch drifting into the middle space. -->
-                <Path Data="M 585,260 C 500,320 520,390 420,440"
-                      Stroke="#58A6FF" StrokeThickness="3" Opacity="0.11"
-                      StrokeDashArray="0.1 4" StrokeDashCap="Round"
-                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <!-- A branch peeling off the fork point towards the lower left. -->
+                    <Path Data="M 560,520 C 500,620 520,700 430,780 C 370,835 390,920 330,990"
+                          Stroke="#808DFF" StrokeThickness="3" Opacity="0.11"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
 
-                <!-- Commit nodes: filled at the fork, rings at the branch tips, all centred on
-                     curve endpoints so they sit exactly on their lines. -->
-                <Ellipse Width="16" Height="16" Canvas.Left="552" Canvas.Top="512"
-                         Fill="#808DFF" Opacity="0.16" />
-                <Ellipse Width="14" Height="14" Canvas.Left="413" Canvas.Top="433"
-                         Stroke="#58A6FF" StrokeThickness="3" Opacity="0.14" />
-                <Ellipse Width="14" Height="14" Canvas.Left="323" Canvas.Top="983"
-                         Stroke="#808DFF" StrokeThickness="3" Opacity="0.14" />
-                <Ellipse Width="12" Height="12" Canvas.Left="654" Canvas.Top="534"
-                         Fill="#A874FF" Opacity="0.14" />
-                <Ellipse Width="10" Height="10" Canvas.Left="585" Canvas.Top="255"
-                         Fill="#58A6FF" Opacity="0.14" />
+                    <!-- A short dotted branch drifting into the middle space. -->
+                    <Path Data="M 585,260 C 500,320 520,390 420,440"
+                          Stroke="#58A6FF" StrokeThickness="3" Opacity="0.11"
+                          StrokeDashArray="0.1 4" StrokeDashCap="Round"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+
+                    <!-- Commit nodes: filled at the fork, rings at the branch tips, all centred on
+                         curve endpoints so they sit exactly on their lines. -->
+                    <Ellipse Width="16" Height="16" Canvas.Left="552" Canvas.Top="512"
+                             Fill="#808DFF" Opacity="0.16" />
+                    <Ellipse Width="14" Height="14" Canvas.Left="413" Canvas.Top="433"
+                             Stroke="#58A6FF" StrokeThickness="3" Opacity="0.14" />
+                    <Ellipse Width="14" Height="14" Canvas.Left="323" Canvas.Top="983"
+                             Stroke="#808DFF" StrokeThickness="3" Opacity="0.14" />
+                    <Ellipse Width="12" Height="12" Canvas.Left="654" Canvas.Top="534"
+                             Fill="#A874FF" Opacity="0.14" />
+                    <Ellipse Width="10" Height="10" Canvas.Left="585" Canvas.Top="255"
+                             Fill="#58A6FF" Opacity="0.14" />
+                </Canvas>
             </Canvas>
         </Viewbox>
+
+        <!--
+            Faint shortcut hints in Home's empty right side, the way editors fill an empty window.
+            Behind the content and not hit-testable: on a narrow window the page simply scrolls over
+            them. Hidden while a sub-page is up — text behind a form is noise.
+        -->
+        <StackPanel x:Name="ShortcutHints" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Margin="0,0,84,0" Spacing="12" IsHitTestVisible="False" Opacity="0.55">
+            <StackPanel.Resources>
+                <Style x:Key="HintKeyStyle" TargetType="Border">
+                    <Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+                    <Setter Property="CornerRadius" Value="4" />
+                    <Setter Property="Padding" Value="7,2" />
+                    <Setter Property="VerticalAlignment" Value="Center" />
+                </Style>
+                <Style x:Key="HintKeyTextStyle" TargetType="TextBlock">
+                    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+                    <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+                    <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Style>
+                <Style x:Key="HintLabelStyle" TargetType="TextBlock"
+                       BasedOn="{StaticResource PageSubtitleStyle}">
+                    <Setter Property="VerticalAlignment" Value="Center" />
+                </Style>
+            </StackPanel.Resources>
+
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <TextBlock Text="Open repository" Style="{StaticResource HintLabelStyle}" />
+                <Border Style="{StaticResource HintKeyStyle}">
+                    <TextBlock Text="Ctrl+O" Style="{StaticResource HintKeyTextStyle}" />
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <TextBlock Text="Command palette" Style="{StaticResource HintLabelStyle}" />
+                <Border Style="{StaticResource HintKeyStyle}">
+                    <TextBlock Text="Ctrl+Shift+P" Style="{StaticResource HintKeyTextStyle}" />
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <TextBlock Text="Go to anything" Style="{StaticResource HintLabelStyle}" />
+                <Border Style="{StaticResource HintKeyStyle}">
+                    <TextBlock Text="Ctrl+T" Style="{StaticResource HintKeyTextStyle}" />
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <TextBlock Text="Terminal" Style="{StaticResource HintLabelStyle}" />
+                <Border Style="{StaticResource HintKeyStyle}">
+                    <TextBlock Text="Ctrl+`" Style="{StaticResource HintKeyTextStyle}" />
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <TextBlock Text="Git activity console" Style="{StaticResource HintLabelStyle}" />
+                <Border Style="{StaticResource HintKeyStyle}">
+                    <TextBlock Text="F12" Style="{StaticResource HintKeyTextStyle}" />
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <TextBlock Text="All shortcuts" Style="{StaticResource HintLabelStyle}" />
+                <Border Style="{StaticResource HintKeyStyle}">
+                    <TextBlock Text="F1" Style="{StaticResource HintKeyTextStyle}" />
+                </Border>
+            </StackPanel>
+        </StackPanel>
 
         <ScrollViewer x:Name="MainContent">
         <StackPanel Padding="40,32,40,40" Spacing="28" MaxWidth="1080" HorizontalAlignment="Left">

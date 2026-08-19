@@ -10,7 +10,7 @@
          is right for the themes that mean to look like part of Windows and wrong for the ones that
          commit to their own background colour. See ThemeService.ApplyBackdrop. -->
 
-    <Grid x:Name="RootGrid" RowDefinitions="Auto,*,Auto"
+    <Grid x:Name="RootGrid" RowDefinitions="Auto,*,Auto,Auto"
           AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop">
         <Grid.Resources>
             <!-- Its Source is assigned in code: a CollectionViewSource is a resource rather than part
@@ -30,6 +30,8 @@
             <KeyboardAccelerator Modifiers="Control,Shift" Key="Z" Invoked="ZenAccelerator_Invoked" />
             <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
             <KeyboardAccelerator Key="F1" Invoked="ShortcutsAccelerator_Invoked" />
+            <!-- F12, where browsers keep their console: the git activity pane. -->
+            <KeyboardAccelerator Key="F12" Invoked="ConsoleAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <!--
@@ -71,7 +73,30 @@
                     BorderThickness="0,0,1,0"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     Visibility="{x:Bind ViewModel.SidebarVisibility, Mode=OneWay}">
-                <Grid RowDefinitions="Auto,Auto,*">
+                <Grid>
+
+                <!-- The column when collapsed: a slim rail keeping the three actions that make sense
+                     without names — expand, Home, open. Collapsing rather than hiding, so the way
+                     back stays where the column was. -->
+                <StackPanel x:Name="SidebarRail" Visibility="Collapsed" Padding="0,10" Spacing="4"
+                            HorizontalAlignment="Center">
+                    <Button Click="ExpandSidebar_Click" Style="{StaticResource IconButtonStyle}"
+                            AutomationProperties.Name="Expand the repository column"
+                            ToolTipService.ToolTip="Expand the repository column">
+                        <FontIcon Glyph="&#xE76C;" FontSize="{StaticResource IconSizeSmall}" />
+                    </Button>
+                    <Button Click="SelectHome_Click" Style="{StaticResource IconButtonStyle}"
+                            AutomationProperties.Name="Home" ToolTipService.ToolTip="Home">
+                        <FontIcon Glyph="&#xE80F;" FontSize="{StaticResource IconSizeSmall}" />
+                    </Button>
+                    <Button Click="AddRepository_Click" Style="{StaticResource IconButtonStyle}"
+                            AutomationProperties.Name="Open a repository"
+                            ToolTipService.ToolTip="Open a repository (Ctrl+O)">
+                        <FontIcon Glyph="&#xE710;" FontSize="{StaticResource IconSizeSmall}" />
+                    </Button>
+                </StackPanel>
+
+                <Grid x:Name="SidebarExpanded" RowDefinitions="Auto,Auto,*">
 
                     <StackPanel Orientation="Horizontal" Spacing="8" Padding="16,12,12,8">
                         <TextBlock Text="Repositories" Style="{StaticResource SectionCaptionStyle}"
@@ -79,6 +104,11 @@
                         <Button Click="AddRepository_Click" Padding="6,2"
                                 AutomationProperties.Name="Open a repository" ToolTipService.ToolTip="Open a repository (Ctrl+O)">
                             <FontIcon Glyph="&#xE710;" FontSize="{StaticResource IconSizeSmall}" />
+                        </Button>
+                        <Button Click="CollapseSidebar_Click" Padding="6,2"
+                                AutomationProperties.Name="Collapse the repository column"
+                                ToolTipService.ToolTip="Collapse the repository column">
+                            <FontIcon Glyph="&#xE76B;" FontSize="{StaticResource IconSizeSmall}" />
                         </Button>
                     </StackPanel>
 
@@ -145,6 +175,18 @@
                             <DataTemplate x:DataType="vm:SidebarRow">
                                 <Grid ColumnDefinitions="Auto,Auto,140,Auto" ColumnSpacing="8" Padding="4,3"
                                       CanDrag="True" DragStarting="SidebarItem_DragStarting">
+                                    <!-- The cross closes; taking a repository off the lists entirely
+                                         is rarer and destructive-ish, so it sits in the context menu
+                                         rather than one slip away from Close. -->
+                                    <Grid.ContextFlyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Close repository" Click="CloseRepository_Click"
+                                                            Tag="{x:Bind}" Visibility="{x:Bind CloseVisibility}" />
+                                            <MenuFlyoutItem Text="Remove from this list" Click="RemoveRepository_Click"
+                                                            Tag="{x:Bind}" Visibility="{x:Bind RemoveVisibility}" />
+                                        </MenuFlyout>
+                                    </Grid.ContextFlyout>
+
                                     <!-- The project's colour, so a row is placeable even when its
                                          section header has scrolled out of view. -->
                                     <Border Width="3" CornerRadius="2" Margin="0,2"
@@ -162,16 +204,17 @@
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
 
-                                    <Button Grid.Column="3" Click="RemoveRepository_Click" Tag="{x:Bind}"
+                                    <Button Grid.Column="3" Click="CloseRepository_Click" Tag="{x:Bind}"
                                             Padding="6,2" FontSize="{StaticResource FontSizeCaption}" VerticalAlignment="Center"
-                                            AutomationProperties.Name="Remove from list" ToolTipService.ToolTip="Remove from list"
-                                            Visibility="{x:Bind RemoveVisibility}">
+                                            AutomationProperties.Name="Close repository" ToolTipService.ToolTip="Close repository"
+                                            Visibility="{x:Bind CloseVisibility}">
                                         <FontIcon Glyph="&#xE711;" FontSize="{StaticResource IconSizeTiny}" />
                                     </Button>
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                </Grid>
                 </Grid>
             </Border>
 
@@ -228,15 +271,24 @@
         </Grid>
 
         <!--
+            The git activity console: every process the app launches, live, with detail for the
+            selected one. Docked above the status bar so it belongs to the window, not to any one
+            repository — commands run from Home land here too. F12 or the status bar's console
+            button toggles it.
+        -->
+        <views:GitActivityPane x:Name="GitConsole" Grid.Row="2" Height="220" Visibility="Collapsed" />
+
+        <!--
             The status bar: which branch, how far it has diverged, what is uncommitted, and whether
             anything is running — the facts worth knowing from every section, in one strip. Each
             segment jumps to the section that acts on it. On Home it reports the application
             instead: the build, the git it found, and how many repositories it knows.
         -->
-        <views:StatusBar Grid.Row="2"
+        <views:StatusBar Grid.Row="3"
                          Tab="{x:Bind ViewModel.SelectedRepository, Mode=OneWay}"
                          Shell="{x:Bind ViewModel}"
                          SectionRequested="StatusBar_SectionRequested"
+                         ConsoleRequested="StatusBar_ConsoleRequested"
                          Visibility="{x:Bind ViewModel.StatusBarVisibility, Mode=OneWay}" />
 
         <!--
@@ -244,7 +296,7 @@
             nothing behind it can be clicked while it is up. Last child, so it draws over everything
             else. Created collapsed and shown when the session says setup has not been through.
         -->
-        <views:SetupWizardView x:Name="SetupWizard" Grid.RowSpan="3"
+        <views:SetupWizardView x:Name="SetupWizard" Grid.RowSpan="4"
                                Visibility="Collapsed"
                                ThemeChanged="SetupWizard_ThemeChanged"
                                Completed="SetupWizard_Completed" />
