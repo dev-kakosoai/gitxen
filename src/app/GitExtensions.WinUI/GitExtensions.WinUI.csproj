@@ -95,6 +95,11 @@
     <None Include="$(NuGetPackageRoot)microsoft.windows.sdk.net.ref\10.0.17763.38\lib\net6.0\Microsoft.Windows.SDK.NET.dll"
           CopyToOutputDirectory="PreserveNewest"
           Visible="false" />
+    <!-- The None item above reads the package out of the NuGet cache by raw path, so nothing in
+         the dependency graph would restore it on a clean machine — a CI runner fails the copy with
+         MSB3030. PackageDownload is NuGet's way to pull a package into the cache without putting
+         it in the graph; the exact-version bracket syntax is required. -->
+    <PackageDownload Include="Microsoft.Windows.SDK.NET.Ref" Version="[10.0.17763.38]" />
   </ItemGroup>
 
   <ItemGroup>
