@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using GitCommands;
 using GitExtensions.Extensibility.Git;
@@ -30,6 +30,16 @@ public sealed class RepositoryTabViewModel : ShellTab
     ///  list, so filtering never discards rows we would have to re-read from git.
     /// </summary>
     private readonly List<CommitRowViewModel> _allCommits = [];
+
+    /// <summary>
+    ///  How many of <see cref="_allCommits"/> are real commits, excluding the working-directory row.
+    /// </summary>
+    /// <remarks>
+    ///  Kept as a counter rather than recounted. It is read once per commit while a page streams in,
+    ///  and counting the list each time made loading a page quadratic — roughly two million predicate
+    ///  calls on the UI thread for a 2,000-commit page.
+    /// </remarks>
+    private int _loadedCommitCount;
 
     private readonly RepositoryLoader _loader;
     private readonly DispatcherQueue _dispatcherQueue;
@@ -791,7 +801,32 @@ public sealed class RepositoryTabViewModel : ShellTab
     /// <summary>Re-reads the conflicts and refreshes the count the navigation badge shows.</summary>
     public async Task LoadConflictsAsync()
     {
-        await ReplaceAsync(Conflicts, _loader.GetConflicts);
+        try
+        {
+            ApplyConflicts(await Task.Run(_loader.GetConflicts));
+        }
+        catch (Exception ex)
+        {
+            // A listing page is not worth a crash; the same rule ReplaceAsync follows.
+            Status = ex.Message;
+        }
+    }
+
+    /// <summary>
+    ///  Publishes a conflict listing that has already been read.
+    /// </summary>
+    /// <remarks>
+    ///  Separate from the read so that a reload, which needs several git commands sequenced around
+    ///  the index, can do the reading itself. See LoadPageAsync.
+    /// </remarks>
+    private void ApplyConflicts(IReadOnlyList<ConflictedFile> conflicts)
+    {
+        Conflicts.Clear();
+
+        foreach (ConflictedFile conflict in conflicts)
+        {
+            Conflicts.Add(conflict);
+        }
 
         OnPropertyChanged(nameof(ConflictCount));
         OnPropertyChanged(nameof(ConflictVisibility));
@@ -893,8 +928,7 @@ public sealed class RepositoryTabViewModel : ShellTab
         _loadCts = cts;
 
         // The working-directory row isn't part of the history, so it never counts towards paging.
-        int loadedCommits = _allCommits.Count(row => !row.IsWorkingDirectory);
-        int skip = append ? loadedCommits : 0;
+        int skip = append ? _loadedCommitCount : 0;
 
         IsLoading = true;
         Status = "";
@@ -903,6 +937,7 @@ public sealed class RepositoryTabViewModel : ShellTab
         if (!append)
         {
             _allCommits.Clear();
+            _loadedCommitCount = 0;
             Commits.Clear();
             ChangedFiles.Clear();
 
@@ -917,20 +952,59 @@ public sealed class RepositoryTabViewModel : ShellTab
             // which would otherwise abort these too.
             if (!append)
             {
-                Branch = await Task.Run(_loader.GetCurrentBranch, cts.Token);
-                _refsByCommit = await Task.Run(_loader.GetRefsByCommit, cts.Token);
-                await ResolveHostAsync(cts.Token);
-                await RefreshRepositoryStateAsync(cts.Token);
-                await RefreshBranchesAsync(cts.Token);
-                await AddWorkingDirectoryRowAsync(cts.Token);
+                // The setup reads, each of which is its own git process. Started together
+                // rather than awaited one at a time: none of them needs another's answer, and on
+                // Windows each costs most of a process launch (60-155ms on this repository), so
+                // running them in sequence spent the better part of a second before `git log` had
+                // even started. They are applied below in the order they were applied before, on the
+                // UI thread, so anything reading these properties sees them settle as it always did.
+                Task<string> branch = Task.Run(_loader.GetCurrentBranch, cts.Token);
+                Task<IReadOnlyDictionary<string, List<RefBadge>>> refs = Task.Run(_loader.GetRefsByCommit, cts.Token);
+                Task<IReadOnlyList<RemoteInfo>> remotes = Task.Run(_loader.GetRemotes, cts.Token);
+                Task<IReadOnlyList<BranchInfo>> branches = Task.Run(_loader.GetBranches, cts.Token);
+                Task<(string Name, string Email)> identity = Task.Run(_loader.GetEffectiveIdentity, cts.Token);
+
+                // The three reads that consult the index are chained to each other rather than
+                // started alongside the rest: each runs `git status` or `git diff`, both of which
+                // refresh the index and can take index.lock to write it back, and two of those at
+                // once can leave one of them failing on the lock. Chained, they still overlap the
+                // five reads above, which only touch refs and config.
+                Task<(RepositoryOperation Operation, IReadOnlyList<ConflictedFile> Conflicts, IReadOnlyList<string> Pending)> workingTree
+                    = Task.Run(
+                        () =>
+                        {
+                            IReadOnlyList<ConflictedFile> conflicted = _loader.GetConflicts();
+                            RepositoryOperation current = _loader.GetCurrentOperation(conflicted.Count);
+                            IReadOnlyList<string> changed = [.. _loader.GetWorkingDirectoryChanges().Select(file => file.Name)];
+
+                            return (current, conflicted, changed);
+                        },
+                        cts.Token);
+
+                Branch = await branch;
+                _refsByCommit = await refs;
+                ApplyHost(await remotes);
+                ApplyBranches(await branches);
+
+                (RepositoryOperation operation, IReadOnlyList<ConflictedFile> conflicts, IReadOnlyList<string> pending) = await workingTree;
+                Operation = operation;
+                ApplyConflicts(conflicts);
+
+                (string name, string email) = await identity;
+                NeedsIdentity = name.Length == 0 || email.Length == 0;
+
+                AddWorkingDirectoryRow(pending);
             }
 
             // The completion callback is enqueued behind every batch the observer dispatched, so by
             // the time it runs the collection is fully populated — the DispatcherQueue is FIFO.
             StreamingObserver observer = new(_dispatcherQueue, cts.Token, batch => AddCommitBatch(batch, skip + MaxCommits), OnStreamFinished);
 
+            // One row more than the page holds. Asking for exactly the page would leave "is there
+            // more?" unanswerable without a second read, whereas the surplus row trips the cap in
+            // AddCommitBatch, which is already what raises HasMoreCommits.
             RevisionQuery query = Query;
-            await Task.Run(() => _loader.StreamRevisions(observer, skip, query, cts.Token), cts.Token);
+            await Task.Run(() => _loader.StreamRevisions(observer, skip, MaxCommits + 1, query, cts.Token), cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -955,18 +1029,19 @@ public sealed class RepositoryTabViewModel : ShellTab
     {
         foreach (GitRevision revision in batch)
         {
-            if (_allCommits.Count(row => !row.IsWorkingDirectory) >= maxCommits)
+            if (_loadedCommitCount >= maxCommits)
             {
                 return false;
             }
 
             CommitRowViewModel row = new(revision)
             {
-                GraphSegments = _graphBuilder.AddCommit(revision),
+                Graph = _graphBuilder.AddCommit(revision),
                 Refs = _refsByCommit.TryGetValue(revision.ObjectId.ToString(), out List<RefBadge>? refs) ? refs : []
             };
 
             _allCommits.Add(row);
+            _loadedCommitCount++;
 
             if (PassesFilter(row))
             {
@@ -977,12 +1052,8 @@ public sealed class RepositoryTabViewModel : ShellTab
         return true;
     }
 
-    private async Task AddWorkingDirectoryRowAsync(CancellationToken cancellationToken)
+    private void AddWorkingDirectoryRow(IReadOnlyList<string> pending)
     {
-        IReadOnlyList<string> pending = await Task.Run<IReadOnlyList<string>>(
-            () => _loader.GetWorkingDirectoryChanges().Select(file => file.Name).ToList(),
-            cancellationToken);
-
         PendingCount = pending.Count;
 
         if (pending.Count == 0)
@@ -1031,10 +1102,9 @@ public sealed class RepositoryTabViewModel : ShellTab
             HasMoreCommits = true;
         }
 
-        int commitCount = _allCommits.Count(row => !row.IsWorkingDirectory);
-        Status = commitCount == 0
+        Status = _loadedCommitCount == 0
             ? "No commits found."
-            : $"{commitCount.ToString("N0", CultureInfo.InvariantCulture)} commits";
+            : $"{_loadedCommitCount.ToString("N0", CultureInfo.InvariantCulture)} commits";
     }
 
     /// <summary>
@@ -1116,10 +1186,11 @@ public sealed class RepositoryTabViewModel : ShellTab
     ///  Refreshes the branch picker and the ahead/behind counters from one <c>for-each-ref</c> read,
     ///  which reports both the names and the tracking state.
     /// </summary>
-    private async Task RefreshBranchesAsync(CancellationToken cancellationToken)
-    {
-        IReadOnlyList<BranchInfo> branches = await Task.Run(_loader.GetBranches, cancellationToken);
+    private async Task RefreshBranchesAsync(CancellationToken cancellationToken) =>
+        ApplyBranches(await Task.Run(_loader.GetBranches, cancellationToken));
 
+    private void ApplyBranches(IReadOnlyList<BranchInfo> branches)
+    {
         BranchDetails.Clear();
         Branches.Clear();
 
@@ -1148,27 +1219,11 @@ public sealed class RepositoryTabViewModel : ShellTab
     ///  Works out where this repository lives online, preferring "origin" and otherwise taking the
     ///  first remote that parses into something browsable.
     /// </summary>
-    private async Task ResolveHostAsync(CancellationToken cancellationToken)
+    private void ApplyHost(IReadOnlyList<RemoteInfo> remotes)
     {
-        IReadOnlyList<RemoteInfo> remotes = await Task.Run(_loader.GetRemotes, cancellationToken);
-
         RemoteInfo? preferred = remotes.FirstOrDefault(remote => remote.Name == "origin") ?? remotes.FirstOrDefault();
 
         Host = preferred is null ? null : GitHostLinks.Parse(preferred.FetchUrl);
-    }
-
-    /// <summary>
-    ///  Re-reads the things that are true of the repository as a whole rather than of one commit: a
-    ///  paused operation, and whether commits can be made at all.
-    /// </summary>
-    private async Task RefreshRepositoryStateAsync(CancellationToken cancellationToken)
-    {
-        Operation = await Task.Run(_loader.GetCurrentOperation, cancellationToken);
-
-        await LoadConflictsAsync();
-
-        (string name, string email) = await Task.Run(_loader.GetEffectiveIdentity, cancellationToken);
-        NeedsIdentity = name.Length == 0 || email.Length == 0;
     }
 
     /// <summary>Continue, skip or abort whatever is paused, using that operation's own subcommand.</summary>

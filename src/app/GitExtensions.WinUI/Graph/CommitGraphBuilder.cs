@@ -2,13 +2,11 @@ using GitExtensions.Extensibility.Git;
 using GitExtensions.WinUI.Theming;
 using GitUIPluginInterfaces;
 using Microsoft.UI.Xaml.Media;
-using Windows.Foundation;
-using Windows.UI;
 
 namespace GitExtensions.WinUI.Graph;
 
 /// <summary>
-///  Builds the commit-graph lane drawing, one row at a time, in the order commits arrive from
+///  Builds the commit-graph lane layout, one row at a time, in the order commits arrive from
 ///  <c>git log</c>.
 /// </summary>
 /// <remarks>
@@ -16,6 +14,11 @@ namespace GitExtensions.WinUI.Graph;
 ///   Standard lane assignment: a lane is a column waiting for a specific commit. When that commit
 ///   arrives it takes the lane, the lane starts waiting for the commit's first parent, and any
 ///   further parents (a merge) either join an existing lane or open a new one.
+///  </para>
+///  <para>
+///   What comes out is a <see cref="GraphRow"/> of plain coordinates, not XAML. The lane layout must
+///   be computed for every commit that loads — a lane only means anything relative to the commits
+///   already placed — but the drawing is built later, for the few rows the list actually realises.
 ///  </para>
 ///  <para>
 ///   Deliberately independent of the WinForms app's graph engine, which lives in GitUI and would
@@ -28,9 +31,8 @@ public sealed class CommitGraphBuilder
     ///  Height of one commit row, and therefore of the lane geometry drawn behind it.
     /// </summary>
     /// <remarks>
-    ///  Read at build time rather than a constant: the geometry for a row is built when the commit
-    ///  loads, so a density change takes effect as each list refreshes, without touching rows that
-    ///  are already on screen.
+    ///  Read as each row is laid out rather than as a constant, so a density change takes effect as
+    ///  the list refreshes without touching rows that are already placed.
     /// </remarks>
     public static double RowHeight => Services.AppOptions.Density == Services.UiDensity.Compact ? 21 : 26;
 
@@ -57,24 +59,29 @@ public sealed class CommitGraphBuilder
     /// <summary>Which commit each lane is currently waiting for; null means the lane is free.</summary>
     private readonly List<ObjectId?> _lanes = [];
 
-    public IReadOnlyList<GraphSegment> AddCommit(GitRevision revision)
-    {
-        // Lines by colour, so a row emits one Path per colour rather than one per segment.
-        Dictionary<int, PathFigureCollection> figuresByLane = [];
+    /// <summary>Reused between rows: the lines are copied out into each row's own array.</summary>
+    private readonly List<GraphLine> _lines = [];
 
+    public GraphRow AddCommit(GitRevision revision)
+    {
+        _lines.Clear();
+
+        double rowHeight = RowHeight;
         int myLane = TakeLane(revision.ObjectId);
 
         // Everything still waiting at the top of this row arrives from above.
         for (int lane = 0; lane < _lanes.Count; lane++)
         {
-            if (_lanes[lane] is null)
+            // Every lane past the overflow column is drawn at the same x as the overflow column
+            // itself, so drawing them would stack identical lines in different colours.
+            if (_lanes[lane] is null || lane > MaxLanes)
             {
                 continue;
             }
 
             // The commit's own lane stops at the dot; the rest pass straight through.
-            double endY = lane == myLane ? RowHeight / 2 : RowHeight;
-            AddLine(figuresByLane, lane, X(lane), 0, X(lane), endY);
+            double endY = lane == myLane ? rowHeight / 2 : rowHeight;
+            _lines.Add(new GraphLine(lane, X(lane), 0, X(lane), endY));
         }
 
         IReadOnlyList<ObjectId>? parents = revision.ParentIds;
@@ -84,7 +91,7 @@ public sealed class CommitGraphBuilder
         _lanes[myLane] = firstParent;
         if (firstParent is not null)
         {
-            AddLine(figuresByLane, myLane, X(myLane), RowHeight / 2, X(myLane), RowHeight);
+            _lines.Add(new GraphLine(myLane, X(myLane), rowHeight / 2, X(myLane), rowHeight));
         }
 
         // A merge sends an extra edge out to each additional parent.
@@ -93,25 +100,13 @@ public sealed class CommitGraphBuilder
             for (int i = 1; i < parents.Count; i++)
             {
                 int parentLane = TakeLane(parents[i]);
-                AddLine(figuresByLane, parentLane, X(myLane), RowHeight / 2, X(parentLane), RowHeight);
+                _lines.Add(new GraphLine(parentLane, X(myLane), rowHeight / 2, X(parentLane), rowHeight));
             }
         }
 
         TrimTrailingFreeLanes();
 
-        List<GraphSegment> segments = [];
-        foreach ((int lane, PathFigureCollection figures) in figuresByLane)
-        {
-            segments.Add(new GraphSegment(new PathGeometry { Figures = figures }, BrushFor(lane), fill: null));
-        }
-
-        // The dot goes last so it paints over the lines meeting underneath it.
-        segments.Add(new GraphSegment(
-            new EllipseGeometry { Center = new Point(X(myLane), RowHeight / 2), RadiusX = 4, RadiusY = 4 },
-            stroke: null,
-            fill: BrushFor(myLane)));
-
-        return segments;
+        return new GraphRow([.. _lines], myLane, X(myLane), rowHeight);
     }
 
     /// <summary>
@@ -144,20 +139,7 @@ public sealed class CommitGraphBuilder
         }
     }
 
-    private static void AddLine(Dictionary<int, PathFigureCollection> figuresByLane, int lane, double x1, double y1, double x2, double y2)
-    {
-        if (!figuresByLane.TryGetValue(lane, out PathFigureCollection? figures))
-        {
-            figures = [];
-            figuresByLane[lane] = figures;
-        }
-
-        PathFigure figure = new() { StartPoint = new Point(x1, y1) };
-        figure.Segments.Add(new LineSegment { Point = new Point(x2, y2) });
-        figures.Add(figure);
-    }
-
     private static double X(int lane) => (Math.Min(lane, MaxLanes) * LaneWidth) + (LaneWidth / 2);
 
-    private static Brush BrushFor(int lane) => LaneBrushes[lane % LaneBrushes.Count];
+    internal static Brush BrushFor(int lane) => LaneBrushes[lane % LaneBrushes.Count];
 }
