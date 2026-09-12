@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using GitExtensions.WinUI.Graph;
 using GitExtensions.WinUI.Models;
 using GitUIPluginInterfaces;
@@ -40,8 +40,22 @@ public sealed class CommitRowViewModel
     /// <summary>The underlying revision; null for the synthetic working-directory row.</summary>
     public GitRevision? Revision { get; }
 
-    /// <summary>Pre-built lane drawing for this row; empty for the working-directory row.</summary>
-    public IReadOnlyList<GraphSegment> GraphSegments { get; init; } = [];
+    /// <summary>
+    ///  Lane layout for this row: plain coordinates, computed as the commit streams in.
+    /// </summary>
+    /// <remarks>
+    ///  <see cref="GraphRow.Empty"/> for the working-directory row, which is not a commit.
+    /// </remarks>
+    public GraphRow Graph { get; init; } = GraphRow.Empty;
+
+    /// <summary>
+    ///  The lane drawing, built the first time the list realises this row.
+    /// </summary>
+    /// <remarks>
+    ///  Bound OneTime from the row template, so the XAML geometry is only ever built for rows that
+    ///  are actually shown — a page loads 2,000 of these and displays about thirty.
+    /// </remarks>
+    public IReadOnlyList<GraphSegment> GraphSegments => Graph.Segments;
 
     /// <summary>
     ///  Branch/tag chips pointing at this commit. Assigned as rows stream in, from the single

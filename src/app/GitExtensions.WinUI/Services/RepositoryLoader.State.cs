@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using GitCommands;
 using GitExtensions.Extensibility;
 using GitExtensions.WinUI.Models;
@@ -19,7 +19,12 @@ internal sealed partial class RepositoryLoader
     ///  these are the same files git's own prompt scripts look at, they are stable across versions,
     ///  and they carry the rebase step counters that status does not.
     /// </remarks>
-    public RepositoryOperation GetCurrentOperation()
+    /// <param name="conflicts">
+    ///  How many files are unmerged. Passed in rather than read here: the only caller has just read
+    ///  the conflict listing, and counting them again meant a second `git diff` over the index —
+    ///  about 200ms on this repository, on the path a reload takes before it can show anything.
+    /// </param>
+    public RepositoryOperation GetCurrentOperation(int conflicts)
     {
         string gitDirectory = GetGitDirectory();
 
@@ -27,8 +32,6 @@ internal sealed partial class RepositoryLoader
         {
             return RepositoryOperation.None;
         }
-
-        int conflicts = GetConflictedFiles().Count;
 
         // An interactive rebase uses rebase-merge; a patch-based one uses rebase-apply. Both count.
         string rebaseMerge = Path.Combine(gitDirectory, "rebase-merge");

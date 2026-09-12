@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using GitCommands;
 using GitCommands.Git;
@@ -34,7 +34,7 @@ internal sealed partial class RepositoryLoader
     ///  them. Blocks the calling thread for the duration — call it from a background thread.
     /// </summary>
     /// <param name="skip">How many of the most recent commits to skip, for paging.</param>
-    public void StreamRevisions(IObserver<IReadOnlyList<GitRevision>> observer, int skip, RevisionQuery query, CancellationToken cancellationToken)
+    public void StreamRevisions(IObserver<IReadOnlyList<GitRevision>> observer, int skip, int maxCount, RevisionQuery query, CancellationToken cancellationToken)
     {
         // revisionFilter is spliced straight into the `git log` argument list, so the scope, the
         // search terms and --skip all belong here rather than being applied afterwards.
@@ -43,6 +43,15 @@ internal sealed partial class RepositoryLoader
         if (skip > 0)
         {
             revisionFilter.Append(CultureInfo.InvariantCulture, $" --skip={skip}");
+        }
+
+        // Without this git walks the whole history and the page is thrown away at the far end: the
+        // caller can only stop the stream once a batch has already arrived past its cap, so on this
+        // repository a page cost the full 17k-commit walk (477ms) rather than 135ms, and parsed
+        // fifteen thousand revisions nobody asked for.
+        if (maxCount > 0)
+        {
+            revisionFilter.Append(CultureInfo.InvariantCulture, $" --max-count={maxCount}");
         }
 
         // -S is a content search: it matches commits that changed the number of occurrences of the

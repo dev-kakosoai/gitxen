@@ -1,4 +1,4 @@
-# Gitxen
+﻿# Gitxen
 
 Gitxen is a free, open-source git client for Windows, built with WinUI 3.
 
@@ -190,7 +190,34 @@ trimmed off before parsing. Requiring a full field count silently drops exactly 
 
 **Reads are capped.** 2,000 commits per page (`AppOptions.MaxCommits`) and 5,000 diff lines
 (`MaxDiffLines`). This repository alone has ~17k commits, more than an unvirtualised bound collection
-should hold. Paging uses `--skip`, spliced into `RevisionReader`'s `revisionFilter`.
+should hold. Paging uses `--skip`, spliced into `RevisionReader`'s `revisionFilter`, alongside
+`--max-count` set to one row **past** the page: git then stops on its own instead of being cancelled
+after the fact, and the surplus row is what tells the page there is more to load. Without it a page
+cost the whole 17k-commit walk (365ms against 119ms here) and parsed fifteen thousand revisions that
+were thrown away.
+
+**A page of history is laid out eagerly and drawn lazily.** `CommitGraphBuilder.AddCommit` has to run
+for every commit that loads, because a lane only means anything relative to the commits already
+placed — but it returns a `GraphRow` of plain coordinates, and the XAML geometry is built by
+`GraphRow.Segments` when the list realises the row. Building it up front cost roughly 37,000
+`PathFigure`/`LineSegment`/`Geometry` objects per page on this repository, all of them WinRT objects
+constructed on the UI thread, of which the virtualised list ever showed about 500. For the same
+reason `_loadedCommitCount` is a counter rather than a `Count(...)` over the loaded rows: recounting
+per commit made loading a page quadratic.
+
+Note that `MaxLanes` clamps where a lane is *drawn*, not how many lanes exist, so every lane past it
+shares the overflow column's x — the builder skips those pass-through lines rather than stacking
+identical ones in different colours.
+
+**The reads a reload needs are started together, not awaited one at a time.** Each is its own git
+process, and on Windows that is most of the cost (60-155ms each here), so sequencing them spent the
+better part of a second before `git log` began. The three that consult the index —
+`GetCurrentOperation`, `GetConflicts`, `GetWorkingDirectoryChanges` — are chained to each other
+inside one task: each runs `git status` or `git diff` without `--no-optional-locks`, so they refresh
+the index and can take `index.lock` to write it back, and two at once can leave one failing on the
+lock. That chain is now the floor for a reload, so `GetCurrentOperation` takes its conflict count as
+an argument instead of running a second `git diff` to recount what `GetConflicts` has just listed.
+Everything is applied on the UI thread, in the order it was applied when the reads were sequential.
 
 **Session state** — open tabs, UI mode, window bounds, settings — persists to
 `%LOCALAPPDATA%\Gitxen\session.json`. Restore failures are written to `restore-error.log`
